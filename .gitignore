@@ -1,0 +1,24 @@
+# Visual Studio / C++
+.vs/
+*.user
+*.suo
+*.vcxproj.user
+out/
+build/
+cmake-build-*/
+
+# Generated binaries
+*.exe
+*.dll
+*.pdb
+*.obj
+*.lib
+*.exp
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

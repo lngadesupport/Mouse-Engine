@@ -1,0 +1,93 @@
+name: Windows Release Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v1.0.0-rc.*'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-package:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      WEBVIEW2_VERSION: '1.0.4258.31'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Visual Studio environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Download pinned WebView2 SDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sdk = Join-Path $env:RUNNER_TEMP 'webview2-sdk'
+          New-Item -ItemType Directory -Force -Path $sdk | Out-Null
+          $nupkg = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$env:WEBVIEW2_VERSION.nupkg"
+          $sdkZip = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$env:WEBVIEW2_VERSION.zip"
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$env:WEBVIEW2_VERSION" -OutFile $nupkg
+          Copy-Item -LiteralPath $nupkg -Destination $sdkZip -Force
+          Expand-Archive -LiteralPath $sdkZip -DestinationPath $sdk -Force
+          "WEBVIEW2_SDK_DIR=$sdk" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if (-not (Test-Path (Join-Path $sdk 'build/native/include/WebView2.h'))) { throw 'WebView2.h missing from SDK' }
+          if (-not (Test-Path (Join-Path $sdk 'build/native/x64/WebView2LoaderStatic.lib'))) { throw 'WebView2LoaderStatic.lib missing from SDK' }
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build-release -G 'Visual Studio 17 2022' -A x64 -DWEBVIEW2_SDK_DIR="$env:WEBVIEW2_SDK_DIR"
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build build-release --config Release --parallel
+
+      - name: Test
+        shell: pwsh
+        run: |
+          ctest --test-dir build-release -C Release --output-on-failure
+
+      - name: Host self-test
+        shell: pwsh
+        run: |
+          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --self-test
+          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-environment
+          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-storage
+
+      - name: Validate Windows host binary
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path '.\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe'
+          $dump = & dumpbin.exe /headers $exe 2>&1
+          if ($LASTEXITCODE -ne 0) { throw 'dumpbin failed for host executable.' }
+          if (-not ($dump | Select-String '8664 machine \(x64\)')) { throw 'Host executable is not a validated x64 PE binary.' }
+          Write-Output 'windows_host_pe_x64: PASS'
+
+      - name: Package Windows distribution
+        shell: pwsh
+        run: |
+          python tools/package_windows.py --source . --host-executable .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --output .\MouseEngine-1.0.0-rc.3-win64.zip
+
+      - name: Verify package archive
+        shell: pwsh
+        run: |
+          python tools/package_windows_tests.py
+          python tools/release_gate.py
+          Expand-Archive -LiteralPath .\MouseEngine-1.0.0-rc.3-win64.zip -DestinationPath .\package-smoke -Force
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\windows_installer_smoke.ps1 -DistributionRoot '.\package-smoke\Mouse Engine'
+          Get-FileHash .\MouseEngine-1.0.0-rc.3-win64.zip -Algorithm SHA256 | Format-List
+
+      - name: Upload Windows distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: MouseEngine-1.0.0-rc.3-win64
+          path: MouseEngine-1.0.0-rc.3-win64.zip
+          if-no-files-found: error
+          retention-days: 30

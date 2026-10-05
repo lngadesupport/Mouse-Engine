@@ -16,6 +16,8 @@ target_link_libraries(MouseEngine.Host.Windows PRIVATE
     shell32
     ole32
     shlwapi
+    setupapi
+    hid
 )
 
 if(WEBVIEW2_SDK_DIR)

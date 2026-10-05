@@ -32,6 +32,7 @@ const hostRequired = [
   'WM_INPUT',
   'GetRawInputData',
   'QueryPerformanceCounter',
+  'GetSystemTimePreciseAsFileTime', 'SessionCapture', 'SessionStore', 'pending_finalization_',
   'QueryPerformanceFrequency',
   'RIDEV_INPUTSINK',
   'InputTimingAccumulator',

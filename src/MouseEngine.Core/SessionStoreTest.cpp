@@ -34,6 +34,15 @@ int main() {
     assert(json.find(""schemaVersion":3") != std::string::npos);
     assert(json.find(""id":"session/unsafe"") != std::string::npos);
 
+    auto summaries = store.list(&error);
+    assert(error.empty());
+    assert(summaries.size() == 1);
+    assert(summaries.front().id == session.id);
+    assert(summaries.front().device_id == "device-1");
+    assert(summaries.front().started_at_utc == "2026-10-05T15:00:00Z");
+    assert(summaries.front().ended_at_utc == "2026-10-05T15:00:01Z");
+    assert(summaries.front().complete);
+
     fs::remove_all(root, ec);
     return 0;
 }

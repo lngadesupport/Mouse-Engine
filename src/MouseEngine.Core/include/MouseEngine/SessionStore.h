@@ -52,6 +52,8 @@ public:
         return paths_.sessions / (sanitize_id(session_id) + ".json");
     }
 
+    const workspace::WorkspacePaths& paths() const noexcept { return paths_; }
+
     std::vector<SessionSummary> list(std::string* error = nullptr) const {
         std::vector<SessionSummary> result;
         std::error_code ec;

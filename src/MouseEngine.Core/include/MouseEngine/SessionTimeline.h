@@ -38,6 +38,7 @@ inline const char* stream_name(unsigned int classes) {
     const bool movement = (classes & mouse_engine::observation::Movement) != 0u;
     const bool button = (classes & mouse_engine::observation::Button) != 0u;
     const bool wheel = (classes & mouse_engine::observation::Wheel) != 0u;
+    if (movement && button && wheel) return "movement+button+wheel";
     if (movement && button) return "movement+button";
     if (movement && wheel) return "movement+wheel";
     if (button && wheel) return "button+wheel";

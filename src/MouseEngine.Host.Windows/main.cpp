@@ -9,6 +9,7 @@
 #include "MouseEngine/SessionTraceStore.h"
 #include "MouseEngine/SessionTimeline.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cwctype>
 #include <limits>

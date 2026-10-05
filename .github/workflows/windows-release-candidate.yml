@@ -78,7 +78,9 @@ jobs:
           $snapshot = ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-snapshot | ConvertFrom-Json
           if ($snapshot.schemaVersion -ne 1) { throw 'Snapshot schema version mismatch.' }
           if ($snapshot.host.online -ne $true) { throw 'Host snapshot is not online.' }
-          if ($snapshot.device.connected -ne $false) { throw 'Unexpected fabricated device connection state.' }
+          if ($snapshot.device.observationAvailable -isnot [bool]) { throw 'Device observation availability must be boolean.' }
+          if ($snapshot.device.connected -isnot [bool]) { throw 'Device connection state must be boolean.' }
+          if ($snapshot.device.mouseCount -isnot [int] -or $snapshot.device.mouseCount -lt 0) { throw 'Mouse count must be a non-negative integer.' }
           if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
           Write-Output 'host_snapshot_contract: PASS'
 

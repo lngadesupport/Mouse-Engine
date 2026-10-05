@@ -1,7 +1,6 @@
 #pragma once
 
 #include "ObservationSession.h"
-#include "ObservationDistribution.h"
 
 #include <algorithm>
 #include <cmath>
@@ -21,6 +20,8 @@ enum PacketClass : unsigned int {
     Button = 1u << 1,
     Wheel = 1u << 2
 };
+
+#include "ObservationDistribution.h"
 
 struct ActivityRules {
     double idle_gap_threshold_ms{mouse_engine::model::kDefaultIdleGapThresholdMs};

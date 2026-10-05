@@ -66,18 +66,23 @@ jobs:
         run: |
           node ui/ui_contract_test.mjs
 
+      - name: WebView2 bridge contract test
+        shell: pwsh
+        run: |
+          node ui/ui_bridge_contract_test.mjs
+
       - name: Host self-test
         shell: pwsh
         run: |
-          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --self-test
-          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-environment
-          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-storage
-          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-snapshot
+          .uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe --self-test
+          .uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe --print-environment
+          .uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe --print-storage
+          .uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe --print-snapshot
 
       - name: Validate Windows host binary
         shell: pwsh
         run: |
-          $exe = Resolve-Path '.\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe'
+          $exe = Resolve-Path '.uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe'
           $dump = & dumpbin.exe /headers $exe 2>&1
           if ($LASTEXITCODE -ne 0) { throw 'dumpbin failed for host executable.' }
           if (-not ($dump | Select-String '8664 machine \(x64\)')) { throw 'Host executable is not a validated x64 PE binary.' }

@@ -32,6 +32,20 @@ read-only identity observation
 WebView2 snapshot
 ```
 
+## Bus topology evidence
+
+For each resolved HID interface, the host walks the Windows Configuration Manager parent chain.
+
+Direct transport classification is deliberately conservative:
+
+- a proven `USB\\` ancestor produces `Usb`;
+- a proven `BTH\\`, `BTHENUM\\` or `BTHLEDEVICE\\` ancestor produces `Bluetooth`;
+- otherwise the result is `Unknown`.
+
+The host does **not** classify a device as 2.4 GHz merely because it is attached to a USB receiver. Receiver ownership requires separate correlation evidence.
+
+Each resolved identity also receives a deterministic topology evidence hash so changes in ancestry can invalidate downstream identity assumptions.
+
 ## Identity fields
 
 The host currently exposes, when available:
@@ -52,7 +66,7 @@ VID/PID alone is not treated as physical identity.
 
 The UI therefore does not infer:
 
-- USB vs Bluetooth vs 2.4 GHz;
+- 2.4 GHz from USB receiver attachment;
 - receiver ownership;
 - vendor protocol;
 - DPI support;

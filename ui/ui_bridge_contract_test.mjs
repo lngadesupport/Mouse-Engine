@@ -16,7 +16,7 @@ const hostRequired = [
   'CM_Get_Parent',
   'CM_Get_Device_IDW',
   'CM_Get_DevNode_Registry_PropertyW',
-  'CM_DRP_ENUMERATOR_NAME',
+  'CM_DRP_LOCATION_INFORMATION',
   'USB\\',
   'BTH\\',
   'Unknown',
@@ -33,11 +33,20 @@ const hostRequired = [
   'PostWebMessageAsJson(snapshot_json().c_str())',
   'add_NavigationCompleted',
   'NavigationCompleted',
-  'schemaVersion'
+  'schemaVersion',
+  'usbioctl.h',
+  'IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX',
+  'USB_NODE_CONNECTION_INFORMATION_EX',
+  'ConnectionIndex',
+  'EndpointDescriptor',
+  'bInterval',
+  'configuredInterval',
+  'descriptorInterval',
+  'observedInterval'
 ];
 
 for (const token of hostRequired) {
-  assert.ok(host.includes(token), `missing WebView2 host bridge contract: ${token}`);
+  assert.ok(host.includes(token), `missing Windows evidence contract: ${token}`);
 }
 
 assert.match(host, /IsWebMessageEnabled/);

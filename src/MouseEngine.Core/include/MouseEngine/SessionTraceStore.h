@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <regex>
 #include <string>
 #include <utility>

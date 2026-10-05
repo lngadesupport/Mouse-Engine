@@ -30,20 +30,21 @@ int main() {
 
     const auto timeline = build_timeline(trace, {anomaly}, 50.0);
     assert(timeline.available);
-    assert(timeline.events.size() == 7);
+    assert(timeline.events.size() == 8);
 
     assert(timeline.events[0].kind == TimelineEventKind::SessionStart);
     assert(timeline.events[1].kind == TimelineEventKind::Packet);
     assert(timeline.events[1].packet_index == 0);
     assert(timeline.events[2].kind == TimelineEventKind::Packet);
-    assert(timeline.events[3].kind == TimelineEventKind::IdleGap);
-    assert(std::abs(timeline.events[3].offset_ms - 60.0) < 1e-9);
-    assert(timeline.events[4].kind == TimelineEventKind::Packet);
+    assert(timeline.events[3].kind == TimelineEventKind::Packet);
+    assert(timeline.events[4].kind == TimelineEventKind::IdleGap);
+    assert(std::abs(timeline.events[4].offset_ms - 60.0) < 1e-9);
     assert(timeline.events[5].kind == TimelineEventKind::Anomaly);
     assert(timeline.events[5].packet_index == 2);
     assert(std::abs(timeline.events[5].offset_ms - 60.0) < 1e-9);
     assert(timeline.events[6].kind == TimelineEventKind::Packet);
-    assert(timeline.events.back().packet_index == 3);
+    assert(timeline.events[7].kind == TimelineEventKind::SessionEnd);
+    assert(timeline.events[6].packet_index == 3);
 
     SessionTrace invalid = trace;
     invalid.packets[2].timestamp_ms = -1.0;

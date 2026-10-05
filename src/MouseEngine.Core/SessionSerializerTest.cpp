@@ -15,12 +15,15 @@ int main() {
     session.all.timing.p95_interval_ms = 10.0;
     session.all.timing.min_interval_ms = 10.0;
     session.all.timing.max_interval_ms = 10.0;
+    session.anomalies.push_back({"a1", "info", "interval-outlier", "Observed interval.", "all", 4, 40.0, {}});
 
     const std::string json = mouse_engine::session::serialize_json(session);
-    assert(json.find(""schemaVersion": 3") != std::string::npos);
-    assert(json.find(""id":"session-123"") != std::string::npos);
-    assert(json.find(""deviceId":"device-1"") != std::string::npos);
-    assert(json.find(""timingScope":"WM_INPUT arrival inter-arrival"") != std::string::npos);
-    assert(json.find(""packetCount":2") != std::string::npos);
+    assert(json.find("\"schemaVersion\":3") != std::string::npos);
+    assert(json.find("\"id\":\"session-123\"") != std::string::npos);
+    assert(json.find("\"deviceId\":\"device-1\"") != std::string::npos);
+    assert(json.find("\"timingScope\":\"WM_INPUT arrival inter-arrival\"") != std::string::npos);
+    assert(json.find("\"packetCount\":2") != std::string::npos);
+    assert(json.find("\"packetIndex\":4") != std::string::npos);
+    assert(json.find("\"timestampMs\":40") != std::string::npos);
     return 0;
 }

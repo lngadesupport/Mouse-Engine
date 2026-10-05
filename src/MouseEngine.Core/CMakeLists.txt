@@ -27,3 +27,10 @@ add_executable(MouseEngine.WorkspaceStoreTest
 target_link_libraries(MouseEngine.WorkspaceStoreTest PRIVATE MouseEngine.Core)
 target_compile_features(MouseEngine.WorkspaceStoreTest PRIVATE cxx_std_20)
 add_test(NAME MouseEngine.WorkspaceStoreTest COMMAND MouseEngine.WorkspaceStoreTest)
+
+add_executable(MouseEngine.SessionRecorderTest
+    SessionRecorderTest.cpp
+)
+target_link_libraries(MouseEngine.SessionRecorderTest PRIVATE MouseEngine.Core)
+target_compile_features(MouseEngine.SessionRecorderTest PRIVATE cxx_std_20)
+add_test(NAME MouseEngine.SessionRecorderTest COMMAND MouseEngine.SessionRecorderTest)

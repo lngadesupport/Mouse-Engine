@@ -27,6 +27,14 @@ def main() -> int:
     assert 'Join-Path $env:USERPROFILE "Documents\\Mouse Engine"' in uninstall_script
     assert 'Join-Path $env:LOCALAPPDATA "Mouse Engine"' in uninstall_script
 
+    self_test_marker = '& (Join-Path $installRoot "MouseEngine.Host.Windows.exe") --self-test'
+    backup_cleanup_marker = 'if (Test-Path $backupRoot) { Remove-Item $backupRoot -Recurse -Force }'
+    assert self_test_marker in install_script
+    assert backup_cleanup_marker in install_script
+    assert install_script.index(self_test_marker) < install_script.index(backup_cleanup_marker)
+    assert 'Move-Item $backupRoot $installRoot -Force -ErrorAction SilentlyContinue' in install_script
+    assert 'elseif (Test-Path $installRoot)' in install_script
+
     with tempfile.TemporaryDirectory() as td:
         fixture = Path(td) / "MouseEngine.Host.Windows.exe"
         fixture.write_bytes(b"MZ" + b"mouse-engine-test-fixture")

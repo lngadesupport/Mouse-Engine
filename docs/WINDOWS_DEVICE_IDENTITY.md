@@ -82,6 +82,25 @@ The Latency Lab therefore keeps three independent states:
 
 No rate is synthesized from `bInterval`.
 
+## Observed Raw Input timing
+
+The Windows host registers the mouse usage page for background Raw Input delivery and records `WM_INPUT` arrival timestamps using `QueryPerformanceCounter`. Timing is accumulated independently for each Raw Input device path.
+
+The native accumulator retains a bounded interval window and exposes:
+
+- interval count;
+- minimum inter-arrival interval;
+- median inter-arrival interval;
+- P95 inter-arrival interval;
+- maximum inter-arrival interval;
+- P95-minus-median spread as a simple jitter indicator.
+
+The measurement scope is explicitly **WM_INPUT arrival inter-arrival**. It is therefore evidence about the host-observed input stream, not a direct electrical/USB bus polling measurement.
+
+No conversion from the observed interval distribution into a claimed device polling rate is performed.
+
+Snapshot schema is now version 2 because observed timing is a new externally visible evidence field.
+
 ## Evidence rules
 
 VID/PID alone is not treated as physical identity.

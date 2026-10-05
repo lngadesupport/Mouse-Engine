@@ -131,6 +131,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         <article class="card section-card"><h3>Compatibility</h3><p>Compatibility records and confidence are resolved independently from the generic HID surface.</p><div class="metric muted">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Observed device detail</h3><p>Read-only fields from the Windows Raw Input device descriptor. These are observations, not configuration claims.</p><div class="cap-list"><div class="cap"><b>Buttons</b><span id="device-buttons-metric">Awaiting evidence</span></div><div class="cap"><b>Sample data rate</b><span id="device-sample-rate-metric">Awaiting evidence</span></div></div></article>
         <article class="card section-card"><h3>USB endpoint evidence</h3><p>The host queries the USB hub path without changing device state. Descriptor evidence is kept separate from configured and observed timing.</p><div class="cap-list"><div class="cap"><b>Connection</b><span id="device-usb-connection-metric">Awaiting evidence</span></div><div class="cap"><b>Interrupt IN endpoints</b><span id="device-usb-endpoint-count">Awaiting evidence</span></div><div class="cap"><b>Device reported</b><span id="device-usb-descriptor-interval">Awaiting evidence</span></div></div></article>
+        <article class="card section-card"><h3>Observed input timing</h3><p>Monotonic host arrival timing for Raw Input packets. This is an observed input-stream statistic, not a claimed device polling frequency.</p><div class="cap-list"><div class="cap"><b>Intervals</b><span id="device-observed-count">Not measured</span></div><div class="cap"><b>Median</b><span id="device-observed-median">Not measured</span></div><div class="cap"><b>P95</b><span id="device-observed-p95">Not measured</span></div><div class="cap"><b>Jitter (P95 − median)</b><span id="device-observed-jitter">Not measured</span></div></div></article>
       </div>
     </section>
 
@@ -173,7 +174,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
     <section class="view" id="view-latency">
       <div class="card section-card"><h3>Latency Lab</h3><p>Baseline → controlled treatment → measurement → statistical analysis → keep/rollback.</p>
         <div class="grid two" style="margin-top:16px"><div class="card section-card"><h3>Polling</h3><p>Requires a valid HID capture session.</p><div class="metric muted">Not measurable</div></div><div class="card section-card"><h3>Click</h3><p>Requires a supported physical measurement path.</p><div class="metric muted">Not measurable</div></div></div>
-        <div class="card section-card" style="margin-top:16px"><h3>Timing evidence</h3><p>These three values are intentionally independent. A USB descriptor interval is not an observed host polling result.</p><div class="cap-list"><div class="cap"><b>Configured</b><span id="latency-configured-interval">Not measured</span></div><div class="cap"><b>Device reported</b><span id="latency-descriptor-interval">Not measured</span></div><div class="cap"><b>Observed</b><span id="latency-observed-interval">Not measured</span></div></div></div>
+        <div class="card section-card" style="margin-top:16px"><h3>Timing evidence</h3><p>These three values are intentionally independent. A USB descriptor interval is not an observed host polling result.</p><div class="cap-list"><div class="cap"><b>Configured</b><span id="latency-configured-interval">Not measured</span></div><div class="cap"><b>Device reported</b><span id="latency-descriptor-interval">Not measured</span></div><div class="cap"><b>Observed input median</b><span id="latency-observed-interval">Not measured</span></div></div></div>
         <div class="actions"><button class="btn primary" disabled>Start baseline</button><button class="btn" disabled>Open experiments</button></div>
       </div>
     </section>
@@ -223,6 +224,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
   const usbConnectionMetric=document.getElementById('device-usb-connection-metric');
   const usbEndpointCount=document.getElementById('device-usb-endpoint-count');
   const usbDescriptorInterval=document.getElementById('device-usb-descriptor-interval');
+  const observedCount=document.getElementById('device-observed-count');
+  const observedMedian=document.getElementById('device-observed-median');
+  const observedP95=document.getElementById('device-observed-p95');
+  const observedJitter=document.getElementById('device-observed-jitter');
   const latencyConfigured=document.getElementById('latency-configured-interval');
   const latencyDescriptor=document.getElementById('latency-descriptor-interval');
   const latencyObserved=document.getElementById('latency-observed-interval');
@@ -267,7 +272,14 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         item.usbEndpoint.configuredInterval && item.usbEndpoint.configuredInterval.available===false &&
         item.usbEndpoint.descriptorInterval && typeof item.usbEndpoint.descriptorInterval.available==='boolean' &&
         Number.isInteger(item.usbEndpoint.descriptorInterval.value) && item.usbEndpoint.descriptorInterval.value>=0 &&
-        item.usbEndpoint.observedInterval && item.usbEndpoint.observedInterval.available===false) &&
+        item.observedInput && typeof item.observedInput.available==='boolean' &&
+        Number.isInteger(item.observedInput.intervalCount) && item.observedInput.intervalCount>=0 &&
+        typeof item.observedInput.minIntervalMs==='number' && item.observedInput.minIntervalMs>=0 &&
+        typeof item.observedInput.medianIntervalMs==='number' && item.observedInput.medianIntervalMs>=0 &&
+        typeof item.observedInput.p95IntervalMs==='number' && item.observedInput.p95IntervalMs>=0 &&
+        typeof item.observedInput.maxIntervalMs==='number' && item.observedInput.maxIntervalMs>=0 &&
+        typeof item.observedInput.jitterP95MinusMedianMs==='number' && item.observedInput.jitterP95MinusMedianMs>=0 &&
+        typeof item.observedInput.scope==='string') &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
       snapshot.identity.transport==='per-device' &&
       snapshot.latency && typeof snapshot.latency.available==='boolean' &&
@@ -294,6 +306,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
       usbConnectionMetric.textContent='Unavailable';
       usbEndpointCount.textContent='Unavailable';
       usbDescriptorInterval.textContent='Unavailable';
+      observedCount.textContent='Unavailable';
+      observedMedian.textContent='Unavailable';
+      observedP95.textContent='Unavailable';
+      observedJitter.textContent='Unavailable';
       latencyConfigured.textContent='Not measured';
       latencyDescriptor.textContent='Not measured';
       latencyObserved.textContent='Not measured';
@@ -337,15 +353,36 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
           usbConnectionMetric.textContent='USB endpoint evidence unavailable';
           usbEndpointCount.textContent='Not available';
           usbDescriptorInterval.textContent='Not available';
+        }
+
+        const observed=resolved.observedInput;
+        if(observed && observed.available && observed.intervalCount>0){
+          observedCount.textContent=`${observed.intervalCount} inter-arrival intervals`;
+          observedMedian.textContent=`${observed.medianIntervalMs.toFixed(3)} ms`;
+          observedP95.textContent=`${observed.p95IntervalMs.toFixed(3)} ms`;
+          observedJitter.textContent=`${observed.jitterP95MinusMedianMs.toFixed(3)} ms`;
+          latencyConfigured.textContent='Not exposed by this read-only path';
+          latencyObserved.textContent=`${observed.medianIntervalMs.toFixed(3)} ms median input inter-arrival`;
+        }else{
+          observedCount.textContent='Not measured';
+          observedMedian.textContent='Not measured';
+          observedP95.textContent='Not measured';
+          observedJitter.textContent='Not measured';
           latencyConfigured.textContent='Not measured';
-          latencyDescriptor.textContent='Not measured';
           latencyObserved.textContent='Not measured';
         }
+        latencyDescriptor.textContent=usb && usb.available && usb.descriptorInterval.available
+          ? `bInterval ${usb.descriptorInterval.value} (device descriptor evidence)`
+          : 'Not available';
       }else{
         vidPidMetric.textContent='Identity pending';
         usbConnectionMetric.textContent='Identity pending';
         usbEndpointCount.textContent='Identity pending';
         usbDescriptorInterval.textContent='Identity pending';
+        observedCount.textContent='Not measured';
+        observedMedian.textContent='Not measured';
+        observedP95.textContent='Not measured';
+        observedJitter.textContent='Not measured';
         latencyConfigured.textContent='Not measured';
         latencyDescriptor.textContent='Not measured';
         latencyObserved.textContent='Not measured';
@@ -359,6 +396,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
       usbConnectionMetric.textContent='No mouse observed';
       usbEndpointCount.textContent='No mouse observed';
       usbDescriptorInterval.textContent='No mouse observed';
+      observedCount.textContent='Not measured';
+      observedMedian.textContent='Not measured';
+      observedP95.textContent='Not measured';
+      observedJitter.textContent='Not measured';
       latencyConfigured.textContent='Not measured';
       latencyDescriptor.textContent='Not measured';
       latencyObserved.textContent='Not measured';

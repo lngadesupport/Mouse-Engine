@@ -81,6 +81,9 @@ jobs:
           if ($snapshot.device.observationAvailable -isnot [bool]) { throw 'Device observation availability must be boolean.' }
           if ($snapshot.device.connected -isnot [bool]) { throw 'Device connection state must be boolean.' }
           if ($snapshot.device.mouseCount -isnot [int] -or $snapshot.device.mouseCount -lt 0) { throw 'Mouse count must be a non-negative integer.' }
+          if ($snapshot.device.detailAvailable -isnot [bool]) { throw 'Device detail availability must be boolean.' }
+          if ($snapshot.device.maxObservedButtons -isnot [int] -or $snapshot.device.maxObservedButtons -lt 0) { throw 'Observed button count must be a non-negative integer.' }
+          if ($snapshot.device.maxObservedSampleRate -isnot [int] -or $snapshot.device.maxObservedSampleRate -lt 0) { throw 'Observed sample rate must be a non-negative integer.' }
           if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
           Write-Output 'host_snapshot_contract: PASS'
 

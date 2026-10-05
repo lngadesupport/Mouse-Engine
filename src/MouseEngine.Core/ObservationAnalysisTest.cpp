@@ -50,5 +50,16 @@ int main() {
     assert(std::abs(anomalies.front().timestamp_ms - 5000.0) < 1e-9);
     assert(anomalies.front().evidence.source == mouse_engine::model::EvidenceSource::RawInput);
 
+    std::vector<TimedPacket> anchored;
+    for (int i = 0; i < 32; ++i) {
+        const double timestamp = i < 10 ? static_cast<double>(i * 10)
+            : (i == 10 ? 200.0 : 200.0 + static_cast<double>((i - 10) * 10));
+        anchored.push_back({timestamp, Movement});
+    }
+    const auto anchored_anomalies = detect_timing_irregularities(anchored);
+    assert(anchored_anomalies.size() == 1);
+    assert(anchored_anomalies.front().packet_index == 10);
+    assert(std::abs(anchored_anomalies.front().timestamp_ms - 200.0) < 1e-9);
+
     return 0;
 }

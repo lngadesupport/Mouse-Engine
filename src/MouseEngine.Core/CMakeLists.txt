@@ -34,3 +34,10 @@ add_executable(MouseEngine.SessionRecorderTest
 target_link_libraries(MouseEngine.SessionRecorderTest PRIVATE MouseEngine.Core)
 target_compile_features(MouseEngine.SessionRecorderTest PRIVATE cxx_std_20)
 add_test(NAME MouseEngine.SessionRecorderTest COMMAND MouseEngine.SessionRecorderTest)
+
+add_executable(MouseEngine.SessionSerializerTest
+    SessionSerializerTest.cpp
+)
+target_link_libraries(MouseEngine.SessionSerializerTest PRIVATE MouseEngine.Core)
+target_compile_features(MouseEngine.SessionSerializerTest PRIVATE cxx_std_20)
+add_test(NAME MouseEngine.SessionSerializerTest COMMAND MouseEngine.SessionSerializerTest)

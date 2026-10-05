@@ -3,6 +3,7 @@
 #include <cassert>
 #include <filesystem>
 #include <string>
+#include <limits>
 
 int main() {
     namespace fs = std::filesystem;
@@ -47,6 +48,27 @@ int main() {
     error.clear();
     assert(!store.load(trace.session_id, &loaded, &error));
     assert(!error.empty());
+
+    mouse_engine::session::SessionTrace invalid_timestamp = trace;
+    invalid_timestamp.session_id = "session-invalid-timestamp";
+    invalid_timestamp.packets[1].timestamp_ms = -1.0;
+    error.clear();
+    assert(!store.save(invalid_timestamp, &error));
+    assert(!error.empty());
+
+    mouse_engine::session::SessionTrace nan_timestamp = trace;
+    nan_timestamp.session_id = "session-nan-timestamp";
+    nan_timestamp.packets[1].timestamp_ms = std::numeric_limits<double>::quiet_NaN();
+    error.clear();
+    assert(!store.save(nan_timestamp, &error));
+    assert(!error.empty());
+
+    mouse_engine::session::SessionTrace empty_trace;
+    empty_trace.session_id = "session-empty";
+    empty_trace.device_id = "device-1";
+    error.clear();
+    assert(store.save(empty_trace, &error));
+    assert(error.empty());
 
     fs::remove_all(root, ec);
     return 0;

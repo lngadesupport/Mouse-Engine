@@ -130,6 +130,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         <article class="card section-card"><h3>Transport</h3><p>USB, Bluetooth or receiver correlation is classified only from evidence-backed topology.</p><div class="metric muted" id="device-transport-metric">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Compatibility</h3><p>Compatibility records and confidence are resolved independently from the generic HID surface.</p><div class="metric muted">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Observed device detail</h3><p>Read-only fields from the Windows Raw Input device descriptor. These are observations, not configuration claims.</p><div class="cap-list"><div class="cap"><b>Buttons</b><span id="device-buttons-metric">Awaiting evidence</span></div><div class="cap"><b>Sample data rate</b><span id="device-sample-rate-metric">Awaiting evidence</span></div></div></article>
+        <article class="card section-card"><h3>USB endpoint evidence</h3><p>The host queries the USB hub path without changing device state. Descriptor evidence is kept separate from configured and observed timing.</p><div class="cap-list"><div class="cap"><b>Connection</b><span id="device-usb-connection-metric">Awaiting evidence</span></div><div class="cap"><b>Interrupt IN endpoints</b><span id="device-usb-endpoint-count">Awaiting evidence</span></div><div class="cap"><b>Device reported</b><span id="device-usb-descriptor-interval">Awaiting evidence</span></div></div></article>
       </div>
     </section>
 
@@ -172,6 +173,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
     <section class="view" id="view-latency">
       <div class="card section-card"><h3>Latency Lab</h3><p>Baseline → controlled treatment → measurement → statistical analysis → keep/rollback.</p>
         <div class="grid two" style="margin-top:16px"><div class="card section-card"><h3>Polling</h3><p>Requires a valid HID capture session.</p><div class="metric muted">Not measurable</div></div><div class="card section-card"><h3>Click</h3><p>Requires a supported physical measurement path.</p><div class="metric muted">Not measurable</div></div></div>
+        <div class="card section-card" style="margin-top:16px"><h3>Timing evidence</h3><p>These three values are intentionally independent. A USB descriptor interval is not an observed host polling result.</p><div class="cap-list"><div class="cap"><b>Configured</b><span id="latency-configured-interval">Not measured</span></div><div class="cap"><b>Device reported</b><span id="latency-descriptor-interval">Not measured</span></div><div class="cap"><b>Observed</b><span id="latency-observed-interval">Not measured</span></div></div></div>
         <div class="actions"><button class="btn primary" disabled>Start baseline</button><button class="btn" disabled>Open experiments</button></div>
       </div>
     </section>
@@ -218,6 +220,12 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
   const transportMetric=document.getElementById('device-transport-metric');
   const buttonsMetric=document.getElementById('device-buttons-metric');
   const sampleRateMetric=document.getElementById('device-sample-rate-metric');
+  const usbConnectionMetric=document.getElementById('device-usb-connection-metric');
+  const usbEndpointCount=document.getElementById('device-usb-endpoint-count');
+  const usbDescriptorInterval=document.getElementById('device-usb-descriptor-interval');
+  const latencyConfigured=document.getElementById('latency-configured-interval');
+  const latencyDescriptor=document.getElementById('latency-descriptor-interval');
+  const latencyObserved=document.getElementById('latency-observed-interval');
 
   const activate=(name)=>{
     const target=document.getElementById('view-'+name);
@@ -250,7 +258,16 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         typeof item.vid==='string' &&
         typeof item.pid==='string' &&
         typeof item.transport==='string' &&
-        typeof item.topologyHash==='string') &&
+        typeof item.topologyHash==='string' &&
+        item.usbEndpoint && typeof item.usbEndpoint.available==='boolean' &&
+        Number.isInteger(item.usbEndpoint.connectionIndex) && item.usbEndpoint.connectionIndex>=0 &&
+        Number.isInteger(item.usbEndpoint.speedCode) && item.usbEndpoint.speedCode>=0 &&
+        Number.isInteger(item.usbEndpoint.deviceAddress) && item.usbEndpoint.deviceAddress>=0 &&
+        Number.isInteger(item.usbEndpoint.interruptInEndpointCount) && item.usbEndpoint.interruptInEndpointCount>=0 &&
+        item.usbEndpoint.configuredInterval && item.usbEndpoint.configuredInterval.available===false &&
+        item.usbEndpoint.descriptorInterval && typeof item.usbEndpoint.descriptorInterval.available==='boolean' &&
+        Number.isInteger(item.usbEndpoint.descriptorInterval.value) && item.usbEndpoint.descriptorInterval.value>=0 &&
+        item.usbEndpoint.observedInterval && item.usbEndpoint.observedInterval.available===false) &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
       snapshot.identity.transport==='per-device' &&
       snapshot.latency && typeof snapshot.latency.available==='boolean' &&
@@ -274,6 +291,12 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
       instanceMetric.textContent='Unavailable';
       buttonsMetric.textContent='Unavailable';
       sampleRateMetric.textContent='Unavailable';
+      usbConnectionMetric.textContent='Unavailable';
+      usbEndpointCount.textContent='Unavailable';
+      usbDescriptorInterval.textContent='Unavailable';
+      latencyConfigured.textContent='Not measured';
+      latencyDescriptor.textContent='Not measured';
+      latencyObserved.textContent='Not measured';
     }else{
       devicePill.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
       devicesSummary.textContent=connected ? `${count} mouse${count===1?'':'s'} observed through Windows Raw Input. Identity is resolved independently through SetupAPI.` : 'Windows Raw Input is available, but no mouse is currently observed.';
@@ -297,14 +320,49 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
           : transports.length===1
             ? transports[0]+' — direct ancestry evidence'
             : 'Mixed — per-device direct ancestry evidence';
+
+        const usb=resolved.usbEndpoint;
+        if(usb && usb.available){
+          usbConnectionMetric.textContent=`Port ${usb.connectionIndex} · address ${usb.deviceAddress} · speed code ${usb.speedCode}`;
+          usbEndpointCount.textContent=`${usb.interruptInEndpointCount} interrupt IN endpoint${usb.interruptInEndpointCount===1?'':'s'}`;
+          usbDescriptorInterval.textContent=usb.descriptorInterval.available
+            ? `bInterval ${usb.descriptorInterval.value} · endpoint 0x${Number(usb.descriptorInterval.endpointAddress).toString(16).padStart(2,'0')}`
+            : 'Descriptor interval unavailable';
+          latencyConfigured.textContent='Not exposed by this read-only path';
+          latencyDescriptor.textContent=usb.descriptorInterval.available
+            ? `bInterval ${usb.descriptorInterval.value} (device descriptor evidence)`
+            : 'Not available';
+          latencyObserved.textContent='Not measured';
+        }else{
+          usbConnectionMetric.textContent='USB endpoint evidence unavailable';
+          usbEndpointCount.textContent='Not available';
+          usbDescriptorInterval.textContent='Not available';
+          latencyConfigured.textContent='Not measured';
+          latencyDescriptor.textContent='Not measured';
+          latencyObserved.textContent='Not measured';
+        }
       }else{
         vidPidMetric.textContent='Identity pending';
+        usbConnectionMetric.textContent='Identity pending';
+        usbEndpointCount.textContent='Identity pending';
+        usbDescriptorInterval.textContent='Identity pending';
+        latencyConfigured.textContent='Not measured';
+        latencyDescriptor.textContent='Not measured';
+        latencyObserved.textContent='Not measured';
         manufacturerMetric.textContent='Identity pending';
         containerMetric.textContent='Identity pending';
         instanceMetric.textContent='Identity pending';
       }
     }
-    if(!connected) transportMetric.textContent='No device topology evidence';
+    if(!connected) {
+      transportMetric.textContent='No device topology evidence';
+      usbConnectionMetric.textContent='No mouse observed';
+      usbEndpointCount.textContent='No mouse observed';
+      usbDescriptorInterval.textContent='No mouse observed';
+      latencyConfigured.textContent='Not measured';
+      latencyDescriptor.textContent='Not measured';
+      latencyObserved.textContent='Not measured';
+    }
     snapshotPill.textContent='Host snapshot: received';
   };
 

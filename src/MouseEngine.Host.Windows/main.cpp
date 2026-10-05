@@ -2,6 +2,7 @@
 #include "InputTiming.h"
 #include "RawInputClassification.h"
 #include "MouseEngine/Workspace.h"
+#include "MouseEngine/WorkspaceStore.h"
 #include "MouseEngine/ObservationSession.h"
 #include <algorithm>
 #include <cstdint>
@@ -851,34 +852,8 @@ std::string snapshot_json() {
 
 bool initialize_workspace(std::string* error = nullptr) {
     const auto paths = mouse_engine::workspace::WorkspacePaths::from_root(workspace_root());
-    std::error_code ec;
-    const std::filesystem::path directories[] = {
-        paths.root, paths.devices, paths.presets, paths.profiles, paths.sessions,
-        paths.diagnostics, paths.reports, paths.experiments, paths.backups
-    };
-    for (const auto& directory : directories) {
-        std::filesystem::create_directories(directory, ec);
-        if (ec) {
-            if (error) *error = "cannot create workspace directory: " + directory.string() + ": " + ec.message();
-            return false;
-        }
-    }
-
-    if (!std::filesystem::exists(paths.manifest)) {
-        std::ofstream manifest(paths.manifest, std::ios::binary | std::ios::trunc);
-        if (!manifest) {
-            if (error) *error = "cannot create workspace manifest: " + paths.manifest.string();
-            return false;
-        }
-        manifest
-            << "{\n"
-            << "  \"schemaVersion\": " << mouse_engine::workspace::kWorkspaceSchemaVersion << ",\n"
-            << "  \"type\": \"" << mouse_engine::workspace::workspace_schema_name() << "\",\n"
-            << "  \"cloudSync\": false,\n"
-            << "  \"createdBy\": \"Mouse Engine\"\n"
-            << "}\n";
-    }
-    return true;
+    mouse_engine::workspace::WorkspaceStore store(paths);
+    return store.initialize(error);
 }
 
 int self_test() {

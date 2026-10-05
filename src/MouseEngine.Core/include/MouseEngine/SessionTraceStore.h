@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <cmath>
 #include <regex>
 #include <string>
 #include <utility>
@@ -28,8 +29,19 @@ public:
 
     bool save(const SessionTrace& trace, std::string* error = nullptr) const {
         if (trace.schema_version != SessionTrace::kSchemaVersion ||
-            trace.session_id.empty() || trace.device_id.empty()) {
+            trace.session_id.empty() || trace.device_id.empty() ||
+            trace.packets.empty() || trace.packets.size() > SessionTrace::kMaxPackets) {
             return fail(error, "invalid session trace");
+        }
+
+        double previous_timestamp = -1.0;
+        for (const auto& packet : trace.packets) {
+            if (!std::isfinite(packet.timestamp_ms) ||
+                packet.timestamp_ms < 0.0 ||
+                packet.timestamp_ms < previous_timestamp) {
+                return fail(error, "invalid session trace timestamp sequence");
+            }
+            previous_timestamp = packet.timestamp_ms;
         }
 
         std::error_code ec;

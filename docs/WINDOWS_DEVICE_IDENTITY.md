@@ -60,6 +60,28 @@ The host currently exposes, when available:
 
 The Raw Input interface path is used internally to correlate the active interface with the corresponding SetupAPI device interface. It is not exposed as a UI write target.
 
+## USB endpoint evidence
+
+For a USB-resolved mouse, the host also correlates the resolved device with an ancestor USB hub and the port reported by Windows location information. It queries `IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX` to obtain read-only connection data and the associated open pipes.
+
+When an interrupt IN pipe exposes an endpoint descriptor, Mouse Engine records:
+
+- connection index;
+- USB device address;
+- Windows-reported speed code;
+- interrupt IN endpoint count;
+- raw endpoint `bInterval` value and endpoint address.
+
+`bInterval` is retained as **descriptor evidence**. Microsoft documents that it reflects the device configuration and is relative to bus speed; it is not itself a fixed time duration and does not prove an observed polling frequency.
+
+The Latency Lab therefore keeps three independent states:
+
+- **Configured** — unavailable until a distinct host scheduling/configuration evidence source exists;
+- **Device reported** — raw USB endpoint descriptor evidence when available;
+- **Observed** — unavailable until a real capture/measurement session produces timing samples.
+
+No rate is synthesized from `bInterval`.
+
 ## Evidence rules
 
 VID/PID alone is not treated as physical identity.
@@ -94,6 +116,6 @@ It does not:
 
 ## Verification status
 
-Static contract checks currently cover the SetupAPI symbols, snapshot schema, UI validation, and mutation boundary.
+Static contract checks cover the SetupAPI symbols, USB hub/endpoint evidence path, snapshot schema, UI validation, timing-state separation, and mutation boundary. A Windows runner with the current branch must still perform the authoritative compile/link/runtime verification. Physical hardware verification remains separate from CI.
 
 A Windows runner with the current branch must still perform the authoritative compile/link/runtime verification. Physical hardware verification remains separate from CI.

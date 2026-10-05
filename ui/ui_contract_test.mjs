@@ -6,7 +6,7 @@ const required = [
   'Overview', 'Devices', 'Performance', 'Controls', 'Profiles', 'Analyzer',
   'Latency Lab', 'Diagnostics', 'Firmware', 'Settings', 'Evidence Rail',
   'Mutation policy', 'DENIED BY DEFAULT', 'No device telemetry available',
-  'Host snapshot: awaiting', 'mouseCount', 'observationAvailable'
+  'Host snapshot: awaiting', 'mouseCount', 'observationAvailable', 'identityResolvedCount', 'instanceId', 'containerId', 'manufacturer', 'product', 'transport'
 ];
 for (const label of required) assert.ok(html.includes(label), `missing UI contract: ${label}`);
 assert.match(html, /id="app"/);

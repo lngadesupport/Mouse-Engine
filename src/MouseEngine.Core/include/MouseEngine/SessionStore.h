@@ -228,7 +228,6 @@ private:
                     }
                     summary->anomalies.push_back(std::move(anomaly));
                 }
-                }
             }
         }
 

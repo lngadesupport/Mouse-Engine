@@ -14,7 +14,9 @@
 #endif
 
 namespace {
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
 using Microsoft::WRL::ComPtr;
+#endif
 
 std::filesystem::path local_app_data() {
     PWSTR raw = nullptr;

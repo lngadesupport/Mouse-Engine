@@ -99,5 +99,9 @@ assert(ui.includes('snapshot.sessions.items'), 'session history snapshot contrac
 
 assert(ui.includes('Persisted CDF comparison'), 'persisted CDF comparison surface');
 assert(ui.includes('Anomaly Ledger'), 'anomaly ledger surface');
+assert(ui.includes('Session Replay'), 'session replay surface');
+assert(ui.includes('session-replay-load'), 'session replay load control');
+assert(ui.includes('session-replay-scrubber'), 'session replay scrubber');
+assert(ui.includes('tracePacketCount'), 'trace packet count contract');
 assert(ui.includes('Packet trace available'), 'replay limitation disclosure');
 assert(ui.includes('sequence-only') || ui.includes('Sequence'), 'anomaly sequence disclosure');

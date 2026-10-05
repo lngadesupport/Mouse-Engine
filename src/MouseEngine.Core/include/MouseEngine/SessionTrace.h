@@ -22,6 +22,7 @@ struct TracePacket {
 
 struct SessionTrace {
     static constexpr int kSchemaVersion = 1;
+    static constexpr std::size_t kMaxPackets = 65536;
 
     int schema_version{kSchemaVersion};
     std::string session_id;
@@ -32,7 +33,7 @@ struct SessionTrace {
 
 class SessionTraceRecorder {
 public:
-    explicit SessionTraceRecorder(std::size_t max_packets = 65536)
+    explicit SessionTraceRecorder(std::size_t max_packets = SessionTrace::kMaxPackets)
         : max_packets_(max_packets) {}
 
     bool start(const std::string& session_id, const std::string& device_id) {

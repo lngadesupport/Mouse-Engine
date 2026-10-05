@@ -22,7 +22,7 @@ enum PacketClass : unsigned int {
 };
 
 struct ActivityRules {
-    double idle_gap_threshold_ms{50.0};
+    double idle_gap_threshold_ms{mouse_engine::model::kDefaultIdleGapThresholdMs};
 };
 
 struct TimingAnomalyRules {

@@ -219,8 +219,24 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
             <div class="cap"><b>CDF</b><span>—</span></div>
           </div>
         </div>
-        <div class="notice" id="session-replay-state" style="margin-top:16px">
-          Replay is metadata-only for persisted sessions. Raw packet samples are not stored in the current session schema, so Mouse Engine will not synthesize a movement replay.
+        <div class="card section-card" style="margin-top:16px">
+          <h3>Session Replay</h3>
+          <p id="session-replay-state">A replay is available only when the session has an optional packet trace. The trace is read-only and reconstructed from captured event deltas; statistics are never used to synthesize packets.</p>
+          <div class="actions">
+            <button class="btn primary" id="session-replay-load" disabled>Load trace</button>
+            <button class="btn" id="session-replay-play" disabled>Play</button>
+          </div>
+          <div class="replay-shell" style="margin-top:16px">
+            <svg id="session-replay-path" viewBox="0 0 800 280" role="img" aria-label="Reconstructed mouse movement trajectory"></svg>
+            <input id="session-replay-scrubber" type="range" min="0" max="0" value="0" step="1" aria-label="Replay event position" disabled>
+            <div class="cap-list">
+              <div class="cap"><b>Event</b><span id="session-replay-index">—</span></div>
+              <div class="cap"><b>Time</b><span id="session-replay-time">—</span></div>
+              <div class="cap"><b>Class</b><span id="session-replay-class">—</span></div>
+              <div class="cap"><b>ΔX / ΔY</b><span id="session-replay-delta">—</span></div>
+              <div class="cap"><b>Buttons / Wheel</b><span id="session-replay-buttons">—</span></div>
+            </div>
+          </div>
         </div>
         <div class="card section-card" style="margin-top:16px">
           <h3>Anomaly Ledger</h3>
@@ -413,7 +429,9 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         item.anomalies && Array.isArray(item.anomalies) &&
         item.anomalies.every(anomaly=>anomaly && typeof anomaly.id==='string' && typeof anomaly.severity==='string' &&
           typeof anomaly.type==='string' && typeof anomaly.message==='string' && typeof anomaly.stream==='string') &&
-        typeof item.complete==='boolean') &&
+        typeof item.complete==='boolean' &&
+        typeof item.traceAvailable==='boolean' &&
+        Number.isInteger(item.tracePacketCount) && item.tracePacketCount>=0) &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
       snapshot.identity.transport==='per-device' &&
       snapshot.latency && typeof snapshot.latency.available==='boolean' &&
@@ -421,6 +439,91 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
   };
 
   let lastSessions=[];
+  let loadedTrace=null;
+  let replayTimer=null;
+  let replayPathPoints=[];
+
+  const replayLoad=document.getElementById('session-replay-load');
+  const replayPlay=document.getElementById('session-replay-play');
+  const replayScrubber=document.getElementById('session-replay-scrubber');
+  const replayPath=document.getElementById('session-replay-path');
+  const replayState=document.getElementById('session-replay-state');
+  const replayIndex=document.getElementById('session-replay-index');
+  const replayTime=document.getElementById('session-replay-time');
+  const replayClass=document.getElementById('session-replay-class');
+  const replayDelta=document.getElementById('session-replay-delta');
+  const replayButtons=document.getElementById('session-replay-buttons');
+
+  const traceClassLabel=(classes)=>{
+    const labels=[];
+    if((classes & 1)!==0) labels.push('movement');
+    if((classes & 2)!==0) labels.push('button');
+    if((classes & 4)!==0) labels.push('wheel');
+    return labels.length ? labels.join(' + ') : 'other';
+  };
+
+  const stopReplay=()=>{
+    if(replayTimer!==null){clearInterval(replayTimer);replayTimer=null;}
+    replayPlay.textContent='Play';
+  };
+
+  const renderReplayFrame=(index)=>{
+    if(!loadedTrace || !loadedTrace.packets.length) return;
+    const packet=loadedTrace.packets[index];
+    const point=replayPathPoints[index];
+    replayIndex.textContent=(index+1)+' / '+loadedTrace.packets.length;
+    replayTime.textContent=Number(packet.timestampMs).toFixed(3)+' ms';
+    replayClass.textContent=traceClassLabel(packet.classes);
+    replayDelta.textContent=String(packet.dx)+' / '+String(packet.dy);
+    replayButtons.textContent=String(packet.buttons)+' / '+String(packet.wheel);
+    const upto=replayPathPoints.slice(0,index+1);
+    const minX=Math.min(...upto.map(p=>p.x),0);
+    const maxX=Math.max(...upto.map(p=>p.x),0);
+    const minY=Math.min(...upto.map(p=>p.y),0);
+    const maxY=Math.max(...upto.map(p=>p.y),0);
+    const spanX=Math.max(1,maxX-minX), spanY=Math.max(1,maxY-minY);
+    const scale=Math.min(740/spanX,240/spanY);
+    const points=upto.map(p=>{
+      const x=30+(p.x-minX)*scale;
+      const y=30+(maxY-p.y)*scale;
+      return x.toFixed(2)+','+y.toFixed(2);
+    }).join(' ');
+    replayPath.innerHTML='<polyline fill="none" stroke="currentColor" stroke-width="2" points="'+points+'"></polyline>' +
+      '<circle cx="'+(30+(point.x-minX)*scale).toFixed(2)+'" cy="'+(30+(maxY-point.y)*scale).toFixed(2)+'" r="5" fill="currentColor"></circle>';
+  };
+
+  const renderTrace=(trace)=>{
+    stopReplay();
+    loadedTrace=trace;
+    replayPathPoints=[];
+    let x=0,y=0;
+    for(const packet of trace.packets){
+      x+=Number(packet.dx)||0;
+      y+=Number(packet.dy)||0;
+      replayPathPoints.push({x,y});
+    }
+    replayScrubber.max=String(Math.max(0,trace.packets.length-1));
+    replayScrubber.value='0';
+    replayScrubber.disabled=trace.packets.length===0;
+    replayPlay.disabled=trace.packets.length===0;
+    replayState.textContent='Trace loaded. '+trace.packets.length+' packets reconstructed locally'+(trace.truncated?' · capture was bounded/truncated.':'')+'.';
+    renderReplayFrame(0);
+  };
+
+  const requestSessionTrace=(sessionId)=>{
+    if(!sessionId || !(window.chrome && window.chrome.webview &&
+      typeof window.chrome.webview.postMessage==='function')){
+      replayState.textContent='Trace request unavailable in this host surface.';
+      return;
+    }
+    replayState.textContent='Requesting read-only trace…';
+    window.chrome.webview.postMessage(JSON.stringify({
+      type:'sessionTraceRequest',
+      sessionId
+    }));
+  };
+
+
   const applySnapshot=(snapshot)=>{
     if(!isValidSnapshot(snapshot)) return;
     lastSessions=snapshot.sessions.items;
@@ -728,7 +831,34 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
       sessionComparisonMethod.textContent='Paired session summary; descriptive deltas only; no winner inference.';
       renderCdfComparison(a,b);
       renderAnomalyLedger(a);
+      const replaySession=a.traceAvailable ? a : (b && b.traceAvailable ? b : null);
+      replayLoad.disabled=!replaySession;
+      replayPlay.disabled=true;
+      replayScrubber.disabled=true;
+      if(!replaySession){
+        stopReplay();
+        loadedTrace=null;
+        replayState.textContent='Replay unavailable: neither selected session has a persisted packet trace.';
+      }else{
+        replayState.textContent='Packet trace available for '+replaySession.id+' ('+replaySession.tracePacketCount+' packets). Load it for deterministic replay.';
+      }
     };
+    replayScrubber.addEventListener('input',()=>renderReplayFrame(Number(replayScrubber.value)));
+    replayPlay.addEventListener('click',()=>{
+      if(!loadedTrace) return;
+      if(replayTimer!==null){stopReplay();return;}
+      replayPlay.textContent='Pause';
+      replayTimer=setInterval(()=>{
+        const next=Number(replayScrubber.value)+1;
+        if(next>=loadedTrace.packets.length){stopReplay();return;}
+        replayScrubber.value=String(next);
+        renderReplayFrame(next);
+      },30);
+    });
+    replayLoad.addEventListener('click',()=>{
+      const selected=sessionCompareA.value || sessionCompareB.value;
+      requestSessionTrace(selected);
+    });
     sessionCompareA.addEventListener('change',()=>renderSessionComparison(lastSessions));
     sessionCompareB.addEventListener('change',()=>renderSessionComparison(lastSessions));
     if(!connected) {
@@ -751,12 +881,20 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
     snapshotPill.textContent='Host snapshot: received';
   };
 
-  // Host -> UI is read-only. The page never sends commands back to the native host.
+  // Host commands remain denied. The only outbound message is a read-only trace request.
   if(window.chrome && window.chrome.webview && typeof window.chrome.webview.addEventListener==='function'){
     window.chrome.webview.addEventListener('message',(event)=>{
       try{
-        const snapshot=typeof event.data==='string' ? JSON.parse(event.data) : event.data;
-        applySnapshot(snapshot);
+        const message=typeof event.data==='string' ? JSON.parse(event.data) : event.data;
+        if(message && message.type==='sessionTrace'){
+          if(message.available===true && Array.isArray(message.packets)){
+            renderTrace(message);
+          }else{
+            replayState.textContent='Replay unavailable: '+(message.error || 'trace could not be loaded')+'.';
+          }
+          return;
+        }
+        applySnapshot(message);
       }catch(_error){
         // Preserve the honest empty state when the host message is malformed.
       }

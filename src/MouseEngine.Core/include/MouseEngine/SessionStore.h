@@ -14,6 +14,14 @@
 
 namespace mouse_engine::session {
 
+struct SessionAnomalySummary {
+    std::string id;
+    std::string severity;
+    std::string type;
+    std::string message;
+    std::string stream;
+};
+
 struct SessionSummary {
     std::string id;
     std::string device_id;
@@ -31,6 +39,7 @@ struct SessionSummary {
     double distribution_mean_interval_ms{0.0};
     double distribution_bucket_width_ms{0.0};
     std::vector<model::DistributionBucket> distribution_buckets;
+    std::vector<SessionAnomalySummary> anomalies;
     bool complete{false};
 };
 
@@ -183,6 +192,29 @@ private:
             bucket.count = static_cast<std::size_t>(std::stoull((*it)[3].str()));
             bucket.cumulative_fraction = std::stod((*it)[4].str());
             summary->distribution_buckets.push_back(bucket);
+        }
+
+        const auto anomalies_pos = json.find("\"anomalies\":[");
+        if (anomalies_pos != std::string::npos) {
+            const auto anomalies_end = json.find("]", anomalies_pos);
+            if (anomalies_end != std::string::npos) {
+                const std::string anomaly_json = json.substr(anomalies_pos, anomalies_end - anomalies_pos);
+                const std::regex anomaly_pattern(
+                    "\\{\\\"id\\\":\\\"([^\\\"]*)\\\","
+                    "\\\"severity\\\":\\\"([^\\\"]*)\\\","
+                    "\\\"type\\\":\\\"([^\\\"]*)\\\","
+                    "\\\"message\\\":\\\"([^\\\"]*)\\\","
+                    "\\\"stream\\\":\\\"([^\\\"]*)\\\"\\}");
+                for (std::sregex_iterator it(anomaly_json.begin(), anomaly_json.end(), anomaly_pattern), end; it != end; ++it) {
+                    SessionAnomalySummary anomaly;
+                    anomaly.id = (*it)[1].str();
+                    anomaly.severity = (*it)[2].str();
+                    anomaly.type = (*it)[3].str();
+                    anomaly.message = (*it)[4].str();
+                    anomaly.stream = (*it)[5].str();
+                    summary->anomalies.push_back(std::move(anomaly));
+                }
+            }
         }
 
         summary->complete = true;

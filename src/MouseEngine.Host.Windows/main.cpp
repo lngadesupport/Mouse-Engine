@@ -346,8 +346,60 @@ UsbEndpointEvidence inspect_usb_endpoint_evidence(const BusTopologyEvidence& top
 }
 
 struct ObservedInputStream {
+    static constexpr double kIdleGapThresholdMs = 50.0;
+
     std::size_t packet_count{0};
     mouse_engine::windows::InputTimingSummary timing{};
+    std::size_t active_run_count{0};
+    std::size_t current_run_packets{0};
+    std::size_t longest_active_run_packets{0};
+    double current_run_start_ms{0.0};
+    double last_timestamp_ms{0.0};
+    double longest_active_run_ms{0.0};
+    std::uint64_t last_timestamp_ticks{0};
+
+    void record(std::uint64_t timestamp_ticks, std::uint64_t frequency_ticks) {
+        if (frequency_ticks == 0) return;
+        const double timestamp_ms =
+            static_cast<double>(timestamp_ticks) * 1000.0 /
+            static_cast<double>(frequency_ticks);
+
+        if (packet_count == 0) {
+            ++active_run_count;
+            current_run_packets = 1;
+            current_run_start_ms = timestamp_ms;
+            last_timestamp_ms = timestamp_ms;
+            last_timestamp_ticks = timestamp_ticks;
+            ++packet_count;
+            longest_active_run_packets = 1;
+            longest_active_run_ms = 0.0;
+            return;
+        }
+
+        if (timestamp_ticks <= last_timestamp_ticks) return;
+
+        const double gap_ms = timestamp_ms - last_timestamp_ms;
+        if (gap_ms >= kIdleGapThresholdMs) {
+            ++active_run_count;
+            current_run_packets = 1;
+            current_run_start_ms = timestamp_ms;
+        } else {
+            ++current_run_packets;
+        }
+
+        last_timestamp_ms = timestamp_ms;
+        last_timestamp_ticks = timestamp_ticks;
+        ++packet_count;
+        longest_active_run_packets =
+            (std::max)(longest_active_run_packets, current_run_packets);
+        longest_active_run_ms =
+            (std::max)(longest_active_run_ms, timestamp_ms - current_run_start_ms);
+    }
+
+    double current_run_duration_ms() const {
+        if (current_run_packets == 0) return 0.0;
+        return (std::max)(0.0, last_timestamp_ms - current_run_start_ms);
+    }
 };
 
 struct ObservedInputStreams {
@@ -559,19 +611,19 @@ public:
                 : 0;
 
         const auto timestamp = static_cast<std::uint64_t>(now.QuadPart);
-        ++timing.all.packet_count;
         timing.all.accumulator.record(timestamp, frequency_ticks_);
+        timing.all.record(timestamp, frequency_ticks_);
         if (raw_mouse_has_movement(mouse.lLastX, mouse.lLastY)) {
-            ++timing.movement.packet_count;
             timing.movement.accumulator.record(timestamp, frequency_ticks_);
+            timing.movement.record(timestamp, frequency_ticks_);
         }
         if (raw_mouse_has_button_event(mouse.usButtonFlags)) {
-            ++timing.button.packet_count;
             timing.button.accumulator.record(timestamp, frequency_ticks_);
+            timing.button.record(timestamp, frequency_ticks_);
         }
         if (raw_mouse_has_wheel_event(mouse.usButtonFlags)) {
-            ++timing.wheel.packet_count;
             timing.wheel.accumulator.record(timestamp, frequency_ticks_);
+            timing.wheel.record(timestamp, frequency_ticks_);
         }
 
         return true;
@@ -726,7 +778,13 @@ std::string timing_stream_json(const ObservedInputStream& stream) {
     std::ostringstream out;
     out << "{\"packetCount\":" << stream.packet_count
         << ",\"timing\":" << timing_summary_json(stream.timing)
-        << "}";
+        << ",\"activity\":{\"activeRunCount\":" << stream.active_run_count
+        << ",\"longestActiveRunPackets\":" << stream.longest_active_run_packets
+        << ",\"longestActiveRunMs\":" << stream.longest_active_run_ms
+        << ",\"currentRunPackets\":" << stream.current_run_packets
+        << ",\"currentRunDurationMs\":" << stream.current_run_duration_ms()
+        << ",\"idleGapThresholdMs\":" << ObservedInputStream::kIdleGapThresholdMs
+        << "}}";
     return out.str();
 }
 

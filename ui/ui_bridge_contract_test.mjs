@@ -77,3 +77,7 @@ for (const token of ['window.chrome.webview', "addEventListener('message'", 'sch
 
 assert.doesNotMatch(ui, /chrome\.webview\.postMessage|window\.chrome\.webview\.postMessage/);
 console.log('WebView2 bridge contract PASS');
+
+assert(source.includes('timing-distribution-chart'), 'Timing distribution UI must be present');
+assert(source.includes('cumulativeFraction'), 'Timing distribution must expose CDF evidence');
+assert(source.includes('WM_INPUT inter-arrival'), 'Timing distribution scope must remain explicit');

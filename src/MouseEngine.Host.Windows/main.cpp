@@ -944,7 +944,19 @@ std::string session_history_json() {
             << ",\"idleGapCount50ms\":" << session.idle_gap_count_50ms
             << ",\"activeRunCount\":" << session.active_run_count
             << ",\"longestActiveRunPackets\":" << session.longest_active_run_packets
-            << ",\"complete\":" << bool_json(session.complete) << "}";
+            << ",\"distribution\":{\"sampleCount\":" << session.distribution_sample_count
+            << ",\"meanIntervalMs\":" << session.distribution_mean_interval_ms
+            << ",\"bucketWidthMs\":" << session.distribution_bucket_width_ms
+            << ",\"buckets\":[";
+        for (std::size_t bucket_index = 0; bucket_index < session.distribution_buckets.size(); ++bucket_index) {
+            if (bucket_index != 0) out << ",";
+            const auto& bucket = session.distribution_buckets[bucket_index];
+            out << "{\"lowerBoundMs\":" << bucket.lower_bound_ms
+                << ",\"upperBoundMs\":" << bucket.upper_bound_ms
+                << ",\"count\":" << bucket.count
+                << ",\"cumulativeFraction\":" << bucket.cumulative_fraction << "}";
+        }
+        out << "]},\"complete\":" << bool_json(session.complete) << "}";
     }
     out << "]}";
     return out.str();

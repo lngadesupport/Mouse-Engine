@@ -1,6 +1,7 @@
 #include <windows.h>
 #include "InputTiming.h"
 #include "RawInputClassification.h"
+#include "MouseEngine/Workspace.h"
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
@@ -51,8 +52,26 @@ std::filesystem::path local_app_data() {
     return std::filesystem::temp_directory_path();
 }
 
-std::filesystem::path storage_root() {
+std::filesystem::path documents_root() {
+    PWSTR raw = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &raw))) {
+        std::filesystem::path result(raw);
+        CoTaskMemFree(raw);
+        return result;
+    }
+    return local_app_data();
+}
+
+std::filesystem::path workspace_root() {
+    return documents_root() / mouse_engine::workspace::kWorkspaceDirectoryName;
+}
+
+std::filesystem::path cache_root() {
     return local_app_data() / L"Mouse Engine";
+}
+
+std::filesystem::path storage_root() {
+    return workspace_root();
 }
 
 std::filesystem::path install_root() {
@@ -771,15 +790,53 @@ std::string snapshot_json() {
     return out.str();
 }
 
-int self_test() {
+bool initialize_workspace(std::string* error = nullptr) {
+    const auto paths = mouse_engine::workspace::WorkspacePaths::from_root(workspace_root());
     std::error_code ec;
-    std::filesystem::create_directories(storage_root(), ec);
-    if (ec) {
-        std::cerr << "self-test: cannot create storage root: " << ec.message() << "\n";
+    const std::filesystem::path directories[] = {
+        paths.root, paths.devices, paths.presets, paths.profiles, paths.sessions,
+        paths.diagnostics, paths.reports, paths.experiments, paths.backups
+    };
+    for (const auto& directory : directories) {
+        std::filesystem::create_directories(directory, ec);
+        if (ec) {
+            if (error) *error = "cannot create workspace directory: " + directory.string() + ": " + ec.message();
+            return false;
+        }
+    }
+
+    if (!std::filesystem::exists(paths.manifest)) {
+        std::ofstream manifest(paths.manifest, std::ios::binary | std::ios::trunc);
+        if (!manifest) {
+            if (error) *error = "cannot create workspace manifest: " + paths.manifest.string();
+            return false;
+        }
+        manifest
+            << "{\n"
+            << "  \"schemaVersion\": " << mouse_engine::workspace::kWorkspaceSchemaVersion << ",\n"
+            << "  \"type\": \"" << mouse_engine::workspace::workspace_schema_name() << "\",\n"
+            << "  \"cloudSync\": false,\n"
+            << "  \"createdBy\": \"Mouse Engine\"\n"
+            << "}\n";
+    }
+    return true;
+}
+
+int self_test() {
+    std::string workspace_error;
+    if (!initialize_workspace(&workspace_error)) {
+        std::cerr << "self-test: " << workspace_error << "\n";
         return 2;
     }
 
-    const auto probe = storage_root() / ".self-test";
+    std::error_code ec;
+    std::filesystem::create_directories(cache_root(), ec);
+    if (ec) {
+        std::cerr << "self-test: cannot create cache root: " << ec.message() << "\n";
+        return 3;
+    }
+
+    const auto probe = workspace_root() / ".self-test";
     {
         std::ofstream file(probe, std::ios::binary | std::ios::trunc);
         if (!file) {
@@ -796,7 +853,8 @@ int self_test() {
 void print_storage() {
     std::cout << "{\n"
               << "  \"installRoot\": \"" << json_escape(install_root().string()) << "\",\n"
-              << "  \"userData\": \"" << json_escape(storage_root().string()) << "\"\n"
+              << "  \"workspaceRoot\": \"" << json_escape(workspace_root().string()) << "\",\n"
+              << "  \"cacheRoot\": \"" << json_escape(cache_root().string()) << "\"\n"
               << "}\n";
 }
 
@@ -948,7 +1006,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
         webview = new WebViewHost();
         register_mouse_device_notifications(hwnd);
         SetTimer(hwnd, kSnapshotTimerId, 250, nullptr);
-        if (!webview->initialize(hwnd, storage_root() / L"WebView2")) {
+        if (!webview->initialize(hwnd, cache_root() / L"WebView2")) {
             delete webview; webview = nullptr;
             show_native_fallback(hwnd,L"WebView2 could not be initialized. Install the Microsoft Edge WebView2 Runtime, then restart Mouse Engine.");
         }
@@ -1034,6 +1092,12 @@ int run_gui(HINSTANCE instance) {
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR command_line, int) {
     HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     const int result = [&]() -> int {
+        std::string workspace_error;
+        if (!initialize_workspace(&workspace_error)) {
+            std::cerr << "workspace: " << workspace_error << "\n";
+            return 1;
+        }
+
         int argc = 0;
         LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
         std::wstring command;

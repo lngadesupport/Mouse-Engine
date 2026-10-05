@@ -17,8 +17,10 @@ if (Test-Path $startMenu) {
 }
 
 if ($RemoveUserData) {
-    $userData = Join-Path $env:LOCALAPPDATA "Mouse Engine"
-    if (Test-Path $userData) { Remove-Item $userData -Recurse -Force }
+    $workspace = Join-Path $env:USERPROFILE "Documents\Mouse Engine"
+    $cache = Join-Path $env:LOCALAPPDATA "Mouse Engine"
+    if (Test-Path $workspace) { Remove-Item $workspace -Recurse -Force }
+    if (Test-Path $cache) { Remove-Item $cache -Recurse -Force }
 }
 
 Write-Output "UNINSTALL=PASS"

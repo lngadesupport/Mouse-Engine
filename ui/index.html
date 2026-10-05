@@ -189,6 +189,30 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         <article class="card section-card"><h3>Analyzer</h3><p>Correlates observations across HID, USB topology, CPU/DPC and GPU timing without asserting causality that was not measured.</p><div class="metric muted">No active session</div></article>
         <article class="card section-card"><h3>Evidence quality</h3><p>Source confidence and missing-data state remain visible instead of being collapsed into a generic error.</p><div class="metric muted">No evidence set</div></article>
       </div>
+      <article class="card section-card" style="margin-top:16px">
+        <h3>Session Explorer</h3>
+        <p>Persisted observation sessions from <code>Documents/Mouse Engine/Sessions</code>. Historical data is read-only; incomplete or insufficient sessions are not treated as benchmark winners.</p>
+        <div class="table-like" id="session-history-list" style="margin-top:16px">
+          <div class="row"><span>No persisted sessions</span><span>Awaiting host snapshot</span><span>—</span></div>
+        </div>
+      </article>
+      <article class="card section-card" style="margin-top:16px">
+        <h3>Session comparison</h3>
+        <p>Paired summary comparison. Positive or negative deltas are descriptive only; Mouse Engine does not infer a winner from timing alone.</p>
+        <div class="grid two" style="margin-top:16px">
+          <label class="cap"><b>Session A</b><select id="session-compare-a" aria-label="Session A"><option value="">No sessions</option></select></label>
+          <label class="cap"><b>Session B</b><select id="session-compare-b" aria-label="Session B"><option value="">No sessions</option></select></label>
+        </div>
+        <div class="cap-list" style="margin-top:16px">
+          <div class="cap"><b>Median Δ</b><span id="session-delta-median">—</span></div>
+          <div class="cap"><b>P95 Δ</b><span id="session-delta-p95">—</span></div>
+          <div class="cap"><b>Jitter Δ</b><span id="session-delta-jitter">—</span></div>
+          <div class="cap"><b>Idle gaps Δ</b><span id="session-delta-idle">—</span></div>
+          <div class="cap"><b>Active runs Δ</b><span id="session-delta-runs">—</span></div>
+          <div class="cap"><b>Longest run Δ</b><span id="session-delta-longest">—</span></div>
+        </div>
+        <div class="notice" id="session-comparison-method" style="margin-top:16px">Select two sessions with observed timing samples.</div>
+      </article>
     </section>
 
     <section class="view" id="view-latency">
@@ -263,6 +287,16 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
   const distributionMedian=document.getElementById('timing-distribution-median');
   const distributionP95=document.getElementById('timing-distribution-p95');
   const distributionCdf=document.getElementById('timing-distribution-cdf');
+  const sessionHistoryList=document.getElementById('session-history-list');
+  const sessionCompareA=document.getElementById('session-compare-a');
+  const sessionCompareB=document.getElementById('session-compare-b');
+  const sessionDeltaMedian=document.getElementById('session-delta-median');
+  const sessionDeltaP95=document.getElementById('session-delta-p95');
+  const sessionDeltaJitter=document.getElementById('session-delta-jitter');
+  const sessionDeltaIdle=document.getElementById('session-delta-idle');
+  const sessionDeltaRuns=document.getElementById('session-delta-runs');
+  const sessionDeltaLongest=document.getElementById('session-delta-longest');
+  const sessionComparisonMethod=document.getElementById('session-comparison-method');
 
   const activate=(name)=>{
     const target=document.getElementById('view-'+name);
@@ -337,14 +371,29 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
             Number.isInteger(timing.idleGapCount50ms) && timing.idleGapCount50ms>=0 &&
             typeof timing.longestIdleGapMs==='number' && timing.longestIdleGapMs>=0;
         })) &&
+      snapshot.sessions && typeof snapshot.sessions.available==='boolean' && Array.isArray(snapshot.sessions.items) &&
+      snapshot.sessions.items.every(item=>item && typeof item.id==='string' && typeof item.deviceId==='string' &&
+        typeof item.startedAtUtc==='string' && typeof item.endedAtUtc==='string' &&
+        Number.isInteger(item.packetCount) && item.packetCount>=0 &&
+        Number.isInteger(item.intervalCount) && item.intervalCount>=0 &&
+        typeof item.medianIntervalMs==='number' && item.medianIntervalMs>=0 &&
+        typeof item.p95IntervalMs==='number' && item.p95IntervalMs>=0 &&
+        typeof item.jitterP95MinusMedianMs==='number' && item.jitterP95MinusMedianMs>=0 &&
+        Number.isInteger(item.idleGapCount50ms) && item.idleGapCount50ms>=0 &&
+        Number.isInteger(item.activeRunCount) && item.activeRunCount>=0 &&
+        Number.isInteger(item.longestActiveRunPackets) && item.longestActiveRunPackets>=0 &&
+        typeof item.complete==='boolean') &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
       snapshot.identity.transport==='per-device' &&
       snapshot.latency && typeof snapshot.latency.available==='boolean' &&
       snapshot.mutation && snapshot.mutation.allowed===false;
   };
 
+  let lastSessions=[];
   const applySnapshot=(snapshot)=>{
     if(!isValidSnapshot(snapshot)) return;
+    lastSessions=snapshot.sessions.items;
+    renderSessionHistory(lastSessions);
     const connected=snapshot.device.connected===true;
     const available=snapshot.device.observationAvailable===true;
     const count=snapshot.device.mouseCount;
@@ -530,6 +579,63 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         sessionDuration.textContent='—';
       }
     }
+    const renderSessionHistory=(sessions)=>{
+      const items=sessions||[];
+      sessionHistoryList.innerHTML='';
+      if(!items.length){
+        sessionHistoryList.innerHTML='<div class="row"><span>No persisted sessions</span><span>Nothing recorded yet</span><span>—</span></div>';
+      }else{
+        items.forEach((item)=>{
+          const row=document.createElement('div');
+          row.className='row';
+          const label=document.createElement('span');
+          label.textContent=item.id;
+          const stats=document.createElement('span');
+          stats.textContent=item.intervalCount+' intervals · median '+item.medianIntervalMs.toFixed(3)+' ms · P95 '+item.p95IntervalMs.toFixed(3)+' ms';
+          const state=document.createElement('span');
+          state.textContent=item.complete ? 'Complete' : 'Incomplete';
+          row.append(label,stats,state);
+          sessionHistoryList.appendChild(row);
+        });
+      }
+
+      const selectedA=sessionCompareA.value;
+      const selectedB=sessionCompareB.value;
+      sessionCompareA.innerHTML='';
+      sessionCompareB.innerHTML='';
+      if(!items.length){
+        sessionCompareA.innerHTML='<option value="">No sessions</option>';
+        sessionCompareB.innerHTML='<option value="">No sessions</option>';
+      }else{
+        items.forEach((item,index)=>{
+          const makeOption=()=>{const option=document.createElement('option'); option.value=item.id; option.textContent=item.id+' · '+item.startedAtUtc; return option;};
+          sessionCompareA.appendChild(makeOption());
+          sessionCompareB.appendChild(makeOption());
+        });
+        sessionCompareA.value=items.some(x=>x.id===selectedA)?selectedA:items[0].id;
+        sessionCompareB.value=items.some(x=>x.id===selectedB)?selectedB:(items[1]?.id||items[0].id);
+      }
+      renderSessionComparison(items);
+    };
+
+    const renderSessionComparison=(items)=>{
+      const a=items.find(x=>x.id===sessionCompareA.value);
+      const b=items.find(x=>x.id===sessionCompareB.value);
+      if(!a || !b || a.id===b.id || a.intervalCount===0 || b.intervalCount===0){
+        [sessionDeltaMedian,sessionDeltaP95,sessionDeltaJitter,sessionDeltaIdle,sessionDeltaRuns,sessionDeltaLongest].forEach(el=>el.textContent='—');
+        sessionComparisonMethod.textContent='Select two distinct sessions with observed timing samples.';
+        return;
+      }
+      sessionDeltaMedian.textContent=(b.medianIntervalMs-a.medianIntervalMs).toFixed(3)+' ms';
+      sessionDeltaP95.textContent=(b.p95IntervalMs-a.p95IntervalMs).toFixed(3)+' ms';
+      sessionDeltaJitter.textContent=(b.jitterP95MinusMedianMs-a.jitterP95MinusMedianMs).toFixed(3)+' ms';
+      sessionDeltaIdle.textContent=String(b.idleGapCount50ms-a.idleGapCount50ms);
+      sessionDeltaRuns.textContent=String(b.activeRunCount-a.activeRunCount);
+      sessionDeltaLongest.textContent=String(b.longestActiveRunPackets-a.longestActiveRunPackets)+' packets';
+      sessionComparisonMethod.textContent='Paired session summary; descriptive deltas only; no winner inference.';
+    };
+    sessionCompareA.addEventListener('change',()=>renderSessionComparison(lastSessions));
+    sessionCompareB.addEventListener('change',()=>renderSessionComparison(lastSessions));
     if(!connected) {
       transportMetric.textContent='No device topology evidence';
       usbConnectionMetric.textContent='No mouse observed';

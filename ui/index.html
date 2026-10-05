@@ -285,7 +285,9 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
             typeof timing.medianIntervalMs==='number' && timing.medianIntervalMs>=0 &&
             typeof timing.p95IntervalMs==='number' && timing.p95IntervalMs>=0 &&
             typeof timing.maxIntervalMs==='number' && timing.maxIntervalMs>=0 &&
-            typeof timing.jitterP95MinusMedianMs==='number' && timing.jitterP95MinusMedianMs>=0;
+            typeof timing.jitterP95MinusMedianMs==='number' && timing.jitterP95MinusMedianMs>=0 &&
+            Number.isInteger(timing.idleGapCount50ms) && timing.idleGapCount50ms>=0 &&
+            typeof timing.longestIdleGapMs==='number' && timing.longestIdleGapMs>=0;
         })) &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
       snapshot.identity.transport==='per-device' &&
@@ -368,7 +370,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
           if(!stream || stream.packetCount<=0) return 'No packets observed';
           const timing=stream.timing;
           if(!timing || timing.intervalCount<=0) return `${stream.packetCount} packets · timing pending`;
-          return `${stream.packetCount} packets · median ${timing.medianIntervalMs.toFixed(3)} ms · P95 ${timing.p95IntervalMs.toFixed(3)} ms`;
+          return `${stream.packetCount} packets · median ${timing.medianIntervalMs.toFixed(3)} ms · P95 ${timing.p95IntervalMs.toFixed(3)} ms · idle gaps ≥50 ms: ${timing.idleGapCount50ms}`;
         };
         if(observed && observed.available && streams && streams.all.packetCount>0){
           observedAll.textContent=formatStream(streams.all);

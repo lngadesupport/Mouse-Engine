@@ -1,6 +1,7 @@
 #include "MouseEngine/SessionTrace.h"
 
 #include <cassert>
+#include <limits>
 
 int main() {
     using namespace mouse_engine::session;
@@ -34,6 +35,12 @@ int main() {
     const auto invalid_replay = build_replay(invalid);
     assert(!invalid_replay.available);
     assert(invalid_replay.events.empty());
+
+    SessionTrace nan_trace = trace;
+    nan_trace.packets[1].timestamp_ms = std::numeric_limits<double>::quiet_NaN();
+    const auto nan_replay = build_replay(nan_trace);
+    assert(!nan_replay.available);
+    assert(nan_replay.events.empty());
 
     recorder.finish();
     assert(!recorder.is_recording());

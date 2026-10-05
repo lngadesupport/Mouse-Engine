@@ -108,6 +108,8 @@ The host also classifies packets into independently measured streams:
 
 These streams intentionally overlap. A packet containing movement and a button transition contributes to both streams. This preserves event-specific evidence without pretending that a mixed Raw Input packet belongs to only one physical action.
 
+The timing summary also reports explicit **idle-gap evidence**: the number of inter-arrival intervals at or above 50 ms and the longest such interval. The 50 ms threshold is a host-observation segmentation threshold, not a device specification.
+
 No conversion from the observed interval distribution into a claimed device polling rate is performed.
 
 Snapshot schema is now version 2 because observed timing is a new externally visible evidence field.

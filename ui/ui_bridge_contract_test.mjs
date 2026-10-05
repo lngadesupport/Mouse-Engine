@@ -41,7 +41,7 @@ const hostRequired = [
   'jitterP95MinusMedianMs',
   'observedInput', 'SessionCapture', 'SessionStore', 'session', 'startedAtUtc', 'durationMs', 'RawInputClassification', 'raw_mouse_has_movement', 'raw_mouse_has_button_event', 'raw_mouse_has_wheel_event', 'streams', 'packetCount', 'timing', 'idleGapCount50ms', 'longestIdleGapMs', 'movement', 'button', 'wheel',
   'put_IsWebMessageEnabled(TRUE)',
-  'PostWebMessageAsJson(snapshot_json().c_str())',
+  'PostWebMessageAsJson',
   'add_NavigationCompleted',
   'NavigationCompleted',
   'schemaVersion',
@@ -58,7 +58,15 @@ const hostRequired = [
   'bInterval',
   'configuredInterval',
   'descriptorInterval',
-  'observedInterval'
+  'observedInterval',
+  'SessionTraceStore',
+  'SessionTrace',
+  'traceAvailable',
+  'tracePacketCount',
+  'session_trace_json',
+  'get_WebMessageAsJson',
+  'add_WebMessageReceived',
+  'sessionTraceRequest'
 ];
 
 for (const token of hostRequired) {
@@ -75,21 +83,21 @@ for (const token of ['window.chrome.webview', "addEventListener('message'", 'sch
   assert.ok(ui.includes(token), `missing WebView2 UI bridge contract: ${token}`);
 }
 
-assert.doesNotMatch(ui, /chrome\.webview\.postMessage|window\.chrome\.webview\.postMessage/);
+assert.match(ui, /window\.chrome\.webview\.postMessage\(JSON\.stringify\(\{\s*type:'sessionTraceRequest'/);
 console.log('WebView2 bridge contract PASS');
 
-assert(source.includes('timing-distribution-chart'), 'Timing distribution UI must be present');
-assert(source.includes('cumulativeFraction'), 'Timing distribution must expose CDF evidence');
-assert(source.includes('WM_INPUT inter-arrival'), 'Timing distribution scope must remain explicit');
+assert(ui.includes('timing-distribution-chart'), 'Timing distribution UI must be present');
+assert(ui.includes('cumulativeFraction'), 'Timing distribution must expose CDF evidence');
+assert(ui.includes('WM_INPUT inter-arrival'), 'Timing distribution scope must remain explicit');
 
-assert(source.includes('Session Explorer'), 'session explorer surface');
-assert(source.includes('session-history-list'), 'session history list');
-assert(source.includes('session-compare-a'), 'session comparison A');
-assert(source.includes('session-compare-b'), 'session comparison B');
-assert(source.includes('Paired session summary; descriptive deltas only; no winner inference.'), 'comparison methodology');
-assert(source.includes('snapshot.sessions.items'), 'session history snapshot contract');
+assert(ui.includes('Session Explorer'), 'session explorer surface');
+assert(ui.includes('session-history-list'), 'session history list');
+assert(ui.includes('session-compare-a'), 'session comparison A');
+assert(ui.includes('session-compare-b'), 'session comparison B');
+assert(ui.includes('Paired session summary; descriptive deltas only; no winner inference.'), 'comparison methodology');
+assert(ui.includes('snapshot.sessions.items'), 'session history snapshot contract');
 
-assert(source.includes('Persisted CDF comparison'), 'persisted CDF comparison surface');
-assert(source.includes('Anomaly Ledger'), 'anomaly ledger surface');
-assert(source.includes('Raw packet samples are not stored'), 'replay limitation disclosure');
-assert(source.includes('sequence-only') || source.includes('Sequence'), 'anomaly sequence disclosure');
+assert(ui.includes('Persisted CDF comparison'), 'persisted CDF comparison surface');
+assert(ui.includes('Anomaly Ledger'), 'anomaly ledger surface');
+assert(ui.includes('Packet trace available'), 'replay limitation disclosure');
+assert(ui.includes('sequence-only') || ui.includes('Sequence'), 'anomaly sequence disclosure');

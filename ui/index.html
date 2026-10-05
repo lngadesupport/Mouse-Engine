@@ -129,6 +129,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         <article class="card section-card"><h3>Identity</h3><p>VID/PID, manufacturer, product, descriptor hash, protocol and physical/session identity will appear here when observed.</p><div class="metric muted" id="device-identity-metric">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Transport</h3><p>USB, Bluetooth or receiver correlation is classified only from evidence-backed topology.</p><div class="metric muted" id="device-transport-metric">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Compatibility</h3><p>Compatibility records and confidence are resolved independently from the generic HID surface.</p><div class="metric muted">Awaiting evidence</div></article>
+        <article class="card section-card"><h3>Observed device detail</h3><p>Read-only fields from the Windows Raw Input device descriptor. These are observations, not configuration claims.</p><div class="cap-list"><div class="cap"><b>Buttons</b><span id="device-buttons-metric">Awaiting evidence</span></div><div class="cap"><b>Sample data rate</b><span id="device-sample-rate-metric">Awaiting evidence</span></div></div></article>
       </div>
     </section>
 
@@ -210,6 +211,8 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
   const identityState=document.getElementById('evidence-identity-state');
   const identityMetric=document.getElementById('device-identity-metric');
   const transportMetric=document.getElementById('device-transport-metric');
+  const buttonsMetric=document.getElementById('device-buttons-metric');
+  const sampleRateMetric=document.getElementById('device-sample-rate-metric');
 
   const activate=(name)=>{
     const target=document.getElementById('view-'+name);
@@ -246,11 +249,15 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
       deviceState.textContent='discovery unavailable';
       identityState.textContent='Raw Input enumeration unavailable';
       identityMetric.textContent='Unavailable';
+      buttonsMetric.textContent='Unavailable';
+      sampleRateMetric.textContent='Unavailable';
     }else{
       devicePill.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
       deviceState.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'no mouse observed';
       identityState.textContent=connected ? `Raw Input observed ${count} mouse${count===1?'':'s'}; physical identity pending` : 'No mouse observation';
       identityMetric.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
+      buttonsMetric.textContent=snapshot.device.detailAvailable ? `${snapshot.device.maxObservedButtons} observed` : 'Detail unavailable';
+      sampleRateMetric.textContent=snapshot.device.detailAvailable ? `${snapshot.device.maxObservedSampleRate} data points/s` : 'Detail unavailable';
     }
     transportMetric.textContent='Awaiting topology evidence';
     snapshotPill.textContent='Host snapshot: received';

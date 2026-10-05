@@ -61,6 +61,11 @@ jobs:
         run: |
           ctest --test-dir build-release -C Release --output-on-failure
 
+      - name: UI contract test
+        shell: pwsh
+        run: |
+          node ui/ui_contract_test.mjs
+
       - name: Host self-test
         shell: pwsh
         run: |

@@ -47,11 +47,12 @@ public:
             return false;
         }
 
-        model::ObservationSession session = recorder_.stop(ended_at_utc);
+        model::ObservationSession session = recorder_.snapshot(ended_at_utc);
         if (!store_.save(session, error)) {
             return false;
         }
 
+        recorder_.finish();
         if (saved_session) *saved_session = std::move(session);
         return true;
     }

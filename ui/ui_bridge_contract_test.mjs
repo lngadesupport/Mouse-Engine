@@ -37,6 +37,10 @@ const hostRequired = [
   'usbioctl.h',
   'IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX',
   'USB_NODE_CONNECTION_INFORMATION_EX',
+  'USB_PIPE_INFO',
+  'GUID_DEVINTERFACE_USB_HUB',
+  'CreateFileW',
+  'DeviceIoControl',
   'ConnectionIndex',
   'EndpointDescriptor',
   'bInterval',
@@ -53,6 +57,7 @@ assert.match(host, /IsWebMessageEnabled/);
 assert.match(host, /PostWebMessageAsJson/);
 assert.match(host, /NavigationCompleted/);
 assert.doesNotMatch(host, /ExecuteScript\(/);
+assert.doesNotMatch(host, /IOCTL_USB_HUB_CYCLE_PORT|IOCTL_USB_RESET_HUB_PORT|IOCTL_USB_RESET_PORT/);
 
 for (const token of ['window.chrome.webview', "addEventListener('message'", 'schemaVersion']) {
   assert.ok(ui.includes(token), `missing WebView2 UI bridge contract: ${token}`);

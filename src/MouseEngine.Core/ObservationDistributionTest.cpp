@@ -40,8 +40,10 @@ int main() {
     session.all.distribution = mouse_engine::observation::to_model_distribution(distribution);
 
     const auto json = mouse_engine::session::serialize_json(session);
-    assert(json.find(""intervalCount":7") != std::string::npos);
-    assert(json.find(""p95IntervalMs":") != std::string::npos);
+    assert(json.find("\"intervalCount\":7") != std::string::npos);
+    assert(json.find("\"p95IntervalMs\":") != std::string::npos);
+    assert(json.find("\"distribution\":") != std::string::npos);
+    assert(json.find("\"cumulativeFraction\":1") != std::string::npos);
 
     return 0;
 }

@@ -37,17 +37,27 @@ public:
         return true;
     }
 
-    model::ObservationSession stop(const std::string& ended_at_utc) {
+    model::ObservationSession snapshot(const std::string& ended_at_utc) const {
         model::ObservationSession session;
         if (!recording_) return session;
         session = observation::build_session(session_id_, device_id_, packets_);
         session.started_at_utc = started_at_utc_;
         session.ended_at_utc = ended_at_utc;
+        return session;
+    }
+
+    void finish() noexcept {
         recording_ = false;
         packets_.clear();
         device_id_.clear();
         started_at_utc_.clear();
         session_id_.clear();
+    }
+
+    model::ObservationSession stop(const std::string& ended_at_utc) {
+        const auto session = snapshot(ended_at_utc);
+        if (session.id.empty()) return session;
+        finish();
         return session;
     }
 

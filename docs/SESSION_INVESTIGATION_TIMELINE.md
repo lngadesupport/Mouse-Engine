@@ -11,7 +11,7 @@ The timeline combines:
 - persisted anomaly records anchored to a packet index;
 - the same observed timing scope already used by the Timing Distribution Lab.
 
-The host loads the persisted session summary to recover anomaly anchors, converts those records into the Core anomaly model, and calls `build_timeline` against the persisted trace. The UI does not independently infer packet ordering, idle gaps, or anomaly placement.
+SessionRecorder generates the Core timing-irregularity records when a captured session is snapshotted, preserving the original packet index and timestamp. The host loads the persisted session summary to recover anomaly anchors, converts those records into the Core anomaly model, and calls `build_timeline` against the persisted trace. The UI does not independently infer packet ordering, idle gaps, or anomaly placement.
 
 It does not reconstruct packets from histograms, CDFs, medians, P95, or any other aggregate statistic.
 

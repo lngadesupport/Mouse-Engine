@@ -5,6 +5,10 @@ const host = fs.readFileSync(new URL('../src/MouseEngine.Host.Windows/main.cpp',
 const ui = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 
 const hostRequired = [
+  'GetRawInputDeviceList',
+  'RIM_TYPEMOUSE',
+  'GetRawInputDeviceInfoW',
+  'mouseCount',
   'put_IsWebMessageEnabled(TRUE)',
   'PostWebMessageAsJson(snapshot_json().c_str())',
   'add_NavigationCompleted',

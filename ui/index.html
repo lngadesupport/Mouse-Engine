@@ -229,7 +229,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
     return snapshot &&
       snapshot.schemaVersion===1 &&
       snapshot.host && snapshot.host.online===true &&
-      snapshot.device && snapshot.device.observationAvailable===true &&
+      snapshot.device && typeof snapshot.device.observationAvailable==='boolean' &&
       typeof snapshot.device.connected==='boolean' &&
       Number.isInteger(snapshot.device.mouseCount) && snapshot.device.mouseCount>=0 &&
       snapshot.latency && typeof snapshot.latency.available==='boolean' &&
@@ -239,11 +239,19 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
   const applySnapshot=(snapshot)=>{
     if(!isValidSnapshot(snapshot)) return;
     const connected=snapshot.device.connected===true;
+    const available=snapshot.device.observationAvailable===true;
     const count=snapshot.device.mouseCount;
-    devicePill.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
-    deviceState.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'no mouse observed';
-    identityState.textContent=connected ? `Raw Input observed ${count} mouse${count===1?'':'s'}; physical identity pending` : 'No mouse observation';
-    identityMetric.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
+    if(!available){
+      devicePill.textContent='Device discovery unavailable';
+      deviceState.textContent='discovery unavailable';
+      identityState.textContent='Raw Input enumeration unavailable';
+      identityMetric.textContent='Unavailable';
+    }else{
+      devicePill.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
+      deviceState.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'no mouse observed';
+      identityState.textContent=connected ? `Raw Input observed ${count} mouse${count===1?'':'s'}; physical identity pending` : 'No mouse observation';
+      identityMetric.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
+    }
     transportMetric.textContent='Awaiting topology evidence';
     snapshotPill.textContent='Host snapshot: received';
   };

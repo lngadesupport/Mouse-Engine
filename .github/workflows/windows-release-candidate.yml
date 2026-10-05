@@ -99,9 +99,14 @@ jobs:
             if ($identity.usbEndpoint.configuredInterval.available -ne $false) { throw 'Configured interval must remain unavailable until a distinct host configuration evidence source exists.' }
             if ($identity.usbEndpoint.descriptorInterval.available -and ($identity.usbEndpoint.descriptorInterval.value -lt 0 -or $identity.usbEndpoint.descriptorInterval.value -gt 255)) { throw 'USB descriptor bInterval must be an unsigned byte.' }
             if ($null -eq $identity.observedInput) { throw 'Resolved identity must carry observed input timing state.' }
-            if ($identity.observedInput.intervalCount -lt 0) { throw 'Observed interval count must be non-negative.' }
-            if ($identity.observedInput.minIntervalMs -lt 0 -or $identity.observedInput.medianIntervalMs -lt 0 -or $identity.observedInput.p95IntervalMs -lt 0 -or $identity.observedInput.maxIntervalMs -lt 0) { throw 'Observed timing values must be non-negative.' }
             if ([string]::IsNullOrWhiteSpace($identity.observedInput.scope)) { throw 'Observed timing scope must be explicit.' }
+            foreach ($streamName in @('all','movement','button','wheel')) {
+              $stream = $identity.observedInput.streams.$streamName
+              if ($null -eq $stream) { throw "Observed input stream missing: $streamName" }
+              if ($stream.intervalCount -lt 0 -or $stream.minIntervalMs -lt 0 -or $stream.medianIntervalMs -lt 0 -or $stream.p95IntervalMs -lt 0 -or $stream.maxIntervalMs -lt 0 -or $stream.jitterP95MinusMedianMs -lt 0) {
+                throw "Observed timing values must be non-negative: $streamName"
+              }
+            }
           }
           if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
           Write-Output 'host_snapshot_contract: PASS'

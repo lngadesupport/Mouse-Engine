@@ -80,34 +80,58 @@ std::string environment_json() {
 
 struct RawMouseObservation {
     bool available{false};
+    bool detail_available{false};
     UINT mouse_count{0};
+    DWORD max_buttons{0};
+    DWORD max_sample_rate{0};
 };
 
 RawMouseObservation observe_raw_mice() {
     RawMouseObservation observation;
-    UINT device_count = 0;
-    if (GetRawInputDeviceList(nullptr, &device_count, sizeof(RAWINPUTDEVICELIST)) == static_cast<UINT>(-1)) {
-        return observation;
-    }
-    observation.available = true;
-    if (device_count == 0) return observation;
 
-    std::vector<RAWINPUTDEVICELIST> devices(device_count);
-    UINT capacity = device_count;
-    const UINT result = GetRawInputDeviceList(
-        devices.data(),
-        &capacity,
-        sizeof(RAWINPUTDEVICELIST));
-    if (result == static_cast<UINT>(-1)) {
-        observation.available = false;
-        return observation;
-    }
-
-    for (UINT index = 0; index < result; ++index) {
-        if (devices[index].dwType == RIM_TYPEMOUSE) {
-            ++observation.mouse_count;
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        UINT device_count = 0;
+        if (GetRawInputDeviceList(nullptr, &device_count, sizeof(RAWINPUTDEVICELIST)) == static_cast<UINT>(-1)) {
+            return observation;
         }
+
+        observation.available = true;
+        if (device_count == 0) return observation;
+
+        std::vector<RAWINPUTDEVICELIST> devices(device_count);
+        UINT capacity = device_count;
+        const UINT result = GetRawInputDeviceList(
+            devices.data(),
+            &capacity,
+            sizeof(RAWINPUTDEVICELIST));
+        if (result == static_cast<UINT>(-1)) {
+            if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) continue;
+            observation.available = false;
+            return observation;
+        }
+
+        for (UINT index = 0; index < result; ++index) {
+            if (devices[index].dwType != RIM_TYPEMOUSE) continue;
+
+            ++observation.mouse_count;
+            RID_DEVICE_INFO info{};
+            info.cbSize = sizeof(info);
+            UINT info_size = sizeof(info);
+            if (GetRawInputDeviceInfoW(
+                    devices[index].hDevice,
+                    RIDI_DEVICEINFO,
+                    &info,
+                    &info_size) != static_cast<UINT>(-1) &&
+                info.dwType == RIM_TYPEMOUSE) {
+                observation.detail_available = true;
+                observation.max_buttons = (std::max)(observation.max_buttons, info.mouse.dwNumberOfButtons);
+                observation.max_sample_rate = (std::max)(observation.max_sample_rate, info.mouse.dwSampleRate);
+            }
+        }
+        return observation;
     }
+
+    observation.available = false;
     return observation;
 }
 
@@ -119,7 +143,10 @@ std::string snapshot_json() {
         << "  \"host\": { \"online\": true, \"platform\": \"windows\", \"architecture\": \"x64\" },\n"
         << "  \"device\": { \"observationAvailable\": " << bool_json(mouse.available)
         << ", \"connected\": " << bool_json(mouse.available && mouse.mouse_count > 0)
-        << ", \"mouseCount\": " << mouse.mouse_count << " },\n"
+        << ", \"mouseCount\": " << mouse.mouse_count
+        << ", \"detailAvailable\": " << bool_json(mouse.detail_available)
+        << ", \"maxObservedButtons\": " << mouse.max_buttons
+        << ", \"maxObservedSampleRate\": " << mouse.max_sample_rate << " },\n"
         << "  \"latency\": { \"available\": false },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";

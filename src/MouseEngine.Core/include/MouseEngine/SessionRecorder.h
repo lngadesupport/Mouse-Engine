@@ -3,7 +3,7 @@
 #include "ObservationAnalysis.h"
 
 #include <cstddef>
-#include <functional>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -11,6 +11,10 @@ namespace mouse_engine::session {
 
 class SessionRecorder {
 public:
+    static constexpr std::size_t kDefaultMaxPackets = 65536;
+
+    explicit SessionRecorder(std::size_t max_packets = kDefaultMaxPackets)
+        : max_packets_(max_packets) {}
     bool start(const std::string& device_id, const std::string& started_at_utc) {
         if (recording_) return false;
         device_id_ = device_id;
@@ -26,6 +30,7 @@ public:
 
     bool record(const observation::TimedPacket& packet) {
         if (!recording_) return false;
+        if (packets_.size() >= max_packets_) return false;
         packets_.push_back(packet);
         return true;
     }
@@ -46,7 +51,13 @@ public:
 
 private:
     static std::string make_session_id(const std::string& device_id, const std::string& started_at_utc) {
-        return "session-" + std::to_string(std::hash<std::string>{}(device_id + "|" + started_at_utc));
+        const std::string input = device_id + "|" + started_at_utc;
+        std::uint64_t hash = 1469598103934665603ull;
+        for (const unsigned char byte : input) {
+            hash ^= byte;
+            hash *= 1099511628211ull;
+        }
+        return "session-" + std::to_string(hash);
     }
 
     bool recording_{false};
@@ -54,6 +65,7 @@ private:
     std::string device_id_;
     std::string started_at_utc_;
     std::vector<observation::TimedPacket> packets_;
+    std::size_t max_packets_{kDefaultMaxPackets};
 };
 
 } // namespace mouse_engine::session

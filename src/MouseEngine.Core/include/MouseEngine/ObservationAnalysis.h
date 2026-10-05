@@ -168,7 +168,8 @@ inline std::vector<mouse_engine::model::ObservationAnomaly> detect_timing_irregu
     const double median = percentile(intervals, 0.50);
     if (!(median > 0.0)) return anomalies;
 
-    for (const double interval : intervals) {
+    for (std::size_t interval_index = 0; interval_index < intervals.size(); ++interval_index) {
+        const double interval = intervals[interval_index];
         if (interval < rules.interval_ratio_threshold * median) continue;
 
         mouse_engine::model::ObservationAnomaly anomaly;
@@ -177,6 +178,8 @@ inline std::vector<mouse_engine::model::ObservationAnomaly> detect_timing_irregu
         anomaly.type = "interval-outlier";
         anomaly.message = "Observed interval is materially longer than the session median; this is an observation, not a hardware-failure diagnosis.";
         anomaly.stream = "all";
+        anomaly.packet_index = interval_index + 1;
+        anomaly.timestamp_ms = packets[interval_index + 1].timestamp_ms;
         anomaly.evidence.source = mouse_engine::model::EvidenceSource::RawInput;
         anomaly.evidence.confidence = mouse_engine::model::EvidenceConfidence::Medium;
         anomaly.evidence.method = "session interval ratio";

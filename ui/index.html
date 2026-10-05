@@ -79,6 +79,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
 @media(max-width:560px){.app{display:block}.sidebar{position:sticky;z-index:20;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px;display:block}.brand{display:none}.nav{display:flex;overflow:auto}.nav button{min-width:48px;justify-content:center}.nav-icon{width:auto}.topbar{align-items:flex-start}.top-actions{display:none}main{padding:18px 12px}.hero-card{padding:20px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 @media(prefers-reduced-transparency:reduce){.sidebar,.card,.pill{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(17,15,25,.97)}}
+.distribution-bar{display:flex;align-items:flex-end;gap:4px;height:130px;padding:12px 4px 0}.distribution-bar span{display:block;min-width:4px;flex:1;border-radius:4px 4px 0 0;background:var(--accent)}.chart-caption{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:12px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -148,6 +149,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         <article class="card section-card"><h3>Compatibility</h3><p>Compatibility records and confidence are resolved independently from the generic HID surface.</p><div class="metric muted">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Observed device detail</h3><p>Read-only fields from the Windows Raw Input device descriptor. These are observations, not configuration claims.</p><div class="cap-list"><div class="cap"><b>Buttons</b><span id="device-buttons-metric">Awaiting evidence</span></div><div class="cap"><b>Sample data rate</b><span id="device-sample-rate-metric">Awaiting evidence</span></div></div></article>
         <article class="card section-card"><h3>USB endpoint evidence</h3><p>The host queries the USB hub path without changing device state. Descriptor evidence is kept separate from configured and observed timing.</p><div class="cap-list"><div class="cap"><b>Connection</b><span id="device-usb-connection-metric">Awaiting evidence</span></div><div class="cap"><b>Interrupt IN endpoints</b><span id="device-usb-endpoint-count">Awaiting evidence</span></div><div class="cap"><b>Device reported</b><span id="device-usb-descriptor-interval">Awaiting evidence</span></div></div></article>
+        <article class="card section-card"><h3>Timing distribution</h3><p>Histogram of observed WM_INPUT inter-arrival intervals. This is host-observed timing, not a physical polling-rate claim.</p><div class="chart" id="timing-distribution-chart" aria-label="Observed interval histogram"></div><div class="chart-caption"><span id="timing-distribution-range">No distribution available</span><span id="timing-distribution-samples">0 samples</span></div></article>
         <article class="card section-card"><h3>Active session</h3><p>A session starts from the first observed Raw Input packet for this device and is persisted locally when the device is removed or the host shuts down.</p><div class="cap-list"><div class="cap"><b>Status</b><span id="device-session-state">No active session</span></div><div class="cap"><b>Session ID</b><span id="device-session-id">—</span></div><div class="cap"><b>Packets recorded</b><span id="device-session-packets">—</span></div><div class="cap"><b>Duration</b><span id="device-session-duration">—</span></div></div></article>
         <article class="card section-card"><h3>Observed input timing</h3><p>Monotonic host arrival timing for Raw Input packets. Scope: WM_INPUT arrival inter-arrival. Streams are event-class evidence, not claimed device polling frequency.</p><div class="cap-list"><div class="cap"><b>All input</b><span id="device-observed-all">Not measured</span></div><div class="cap"><b>Movement stream</b><span id="device-observed-movement">Not measured</span></div><div class="cap"><b>Button events</b><span id="device-observed-button">Not measured</span></div><div class="cap"><b>Wheel events</b><span id="device-observed-wheel">Not measured</span></div><div class="cap"><b>Active runs</b><span id="device-observed-active-runs">Not measured</span></div></div></article>
       </div>
@@ -254,6 +256,9 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
   const sessionId=document.getElementById('device-session-id');
   const sessionPackets=document.getElementById('device-session-packets');
   const sessionDuration=document.getElementById('device-session-duration');
+  const distributionChart=document.getElementById('timing-distribution-chart');
+  const distributionRange=document.getElementById('timing-distribution-range');
+  const distributionSamples=document.getElementById('timing-distribution-samples');
 
   const activate=(name)=>{
     const target=document.getElementById('view-'+name);
@@ -304,6 +309,11 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         typeof item.observedInput.session.startedAtUtc==='string' &&
         Number.isInteger(item.observedInput.session.packetCount) && item.observedInput.session.packetCount>=0 &&
         typeof item.observedInput.session.durationMs==='number' && item.observedInput.session.durationMs>=0 &&
+        item.observedInput.session.distribution &&
+        Number.isInteger(item.observedInput.session.distribution.sampleCount) && item.observedInput.session.distribution.sampleCount>=0 &&
+        typeof item.observedInput.session.distribution.meanIntervalMs==='number' && item.observedInput.session.distribution.meanIntervalMs>=0 &&
+        typeof item.observedInput.session.distribution.bucketWidthMs==='number' && item.observedInput.session.distribution.bucketWidthMs>=0 &&
+        Array.isArray(item.observedInput.session.distribution.buckets) &&
         item.observedInput.streams && ['all','movement','button','wheel'].every(key=>{
           const stream=item.observedInput.streams[key];
           const timing=stream && stream.timing;
@@ -361,6 +371,9 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
       sessionId.textContent='—';
       sessionPackets.textContent='—';
       sessionDuration.textContent='—';
+      distributionChart.textContent='Not measured';
+      distributionRange.textContent='No distribution available';
+      distributionSamples.textContent='0 samples';
     }else{
       devicePill.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
       devicesSummary.textContent=connected ? `${count} mouse${count===1?'':'s'} observed through Windows Raw Input. Identity is resolved independently through SetupAPI.` : 'Windows Raw Input is available, but no mouse is currently observed.';
@@ -422,6 +435,27 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
             sessionId.textContent=activeSession.id||'—';
             sessionPackets.textContent=String(activeSession.packetCount);
             sessionDuration.textContent=(activeSession.durationMs/1000).toFixed(1)+' s';
+          const distribution=activeSession.distribution;
+          distributionChart.innerHTML='';
+          if(distribution && distribution.buckets && distribution.buckets.length){
+            const wrap=document.createElement('div');
+            wrap.className='distribution-bar';
+            const maxCount=Math.max(...distribution.buckets.map(b=>b.count),1);
+            distribution.buckets.forEach(bucket=>{
+              const bar=document.createElement('span');
+              bar.style.height=Math.max(2,(bucket.count/maxCount)*100)+'%';
+              bar.title=bucket.lowerBoundMs.toFixed(3)+'–'+bucket.upperBoundMs.toFixed(3)+' ms · '+bucket.count+' samples · CDF '+(bucket.cumulativeFraction*100).toFixed(1)+'%';
+              wrap.appendChild(bar);
+            });
+            distributionChart.appendChild(wrap);
+            const first=distribution.buckets[0], last=distribution.buckets[distribution.buckets.length-1];
+            distributionRange.textContent=first.lowerBoundMs.toFixed(3)+'–'+last.upperBoundMs.toFixed(3)+' ms';
+            distributionSamples.textContent=String(distribution.sampleCount)+' samples';
+          }else{
+            distributionChart.textContent='Collecting enough observed intervals…';
+            distributionRange.textContent='No distribution available';
+            distributionSamples.textContent='0 samples';
+          }
           }else{
             sessionState.textContent='No active session';
             sessionId.textContent='—';

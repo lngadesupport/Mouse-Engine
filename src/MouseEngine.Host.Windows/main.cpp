@@ -40,7 +40,7 @@ std::string json_escape(const std::string& value) {
     std::string out;
     for (char c : value) {
         if (c == '\\') out += "\\\\";
-        else if (c == '"') out += "\\"";
+        else if (c == '"') out += "\\\"";
         else if (c == '\n') out += "\\n";
         else if (c == '\r') out += "\\r";
         else if (c == '\t') out += "\\t";

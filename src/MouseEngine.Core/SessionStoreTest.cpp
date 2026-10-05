@@ -25,6 +25,11 @@ int main() {
     session.all.timing.median_interval_ms = 0.982;
     session.all.timing.p95_interval_ms = 1.104;
     session.all.timing.jitter_p95_minus_median_ms = 0.122;
+    session.all.distribution.sample_count = 119;
+    session.all.distribution.mean_interval_ms = 0.993;
+    session.all.distribution.bucket_width_ms = 0.050;
+    session.all.distribution.buckets.push_back({0.950, 1.000, 80, 0.672268907563});
+    session.all.distribution.buckets.push_back({1.000, 1.050, 39, 1.0});
     session.all.timing.idle_gap_count_50ms = 3;
     session.activity.active_run_count = 7;
     session.activity.longest_active_run_packets = 54;
@@ -58,6 +63,11 @@ int main() {
     assert(summaries.front().idle_gap_count_50ms == 3);
     assert(summaries.front().active_run_count == 7);
     assert(summaries.front().longest_active_run_packets == 54);
+    assert(summaries.front().distribution_sample_count == 119);
+    assert(summaries.front().distribution_mean_interval_ms == 0.993);
+    assert(summaries.front().distribution_buckets.size() == 2);
+    assert(summaries.front().distribution_buckets[0].count == 80);
+    assert(summaries.front().distribution_buckets[1].cumulative_fraction == 1.0);
 
     fs::remove_all(root, ec);
     return 0;

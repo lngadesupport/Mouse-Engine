@@ -55,6 +55,8 @@ struct ObservationAnomaly {
     std::string type;
     std::string message;
     std::string stream;
+    std::size_t packet_index{0};
+    double timestamp_ms{0.0};
     Evidence evidence{};
 };
 

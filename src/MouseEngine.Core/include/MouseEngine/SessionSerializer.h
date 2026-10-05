@@ -92,7 +92,9 @@ inline std::string serialize_json(const model::ObservationSession& session) {
             << "\",\"severity\":\"" << json_escape(a.severity)
             << "\",\"type\":\"" << json_escape(a.type)
             << "\",\"message\":\"" << json_escape(a.message)
-            << "\",\"stream\":\"" << json_escape(a.stream) << "\"}";
+            << "\",\"stream\":\"" << json_escape(a.stream)
+            << "\",\"packetIndex\":" << a.packet_index
+            << ",\"timestampMs\":" << a.timestamp_ms << "}";
     }
     out << "]}";
     return out.str();

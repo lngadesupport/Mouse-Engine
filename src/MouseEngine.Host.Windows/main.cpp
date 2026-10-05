@@ -4,6 +4,7 @@
 #include "MouseEngine/Workspace.h"
 #include "MouseEngine/WorkspaceStore.h"
 #include "MouseEngine/ObservationSession.h"
+#include "MouseEngine/SessionCapture.h"
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
@@ -20,6 +21,8 @@
 #include <shellapi.h>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
+#include <memory>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -411,9 +414,19 @@ struct ObservedInputStreams {
     ObservedInputStream wheel{};
 };
 
+struct ActiveSessionEvidence {
+    bool active{false};
+    std::string id;
+    std::string device_id;
+    std::string started_at_utc;
+    std::size_t packet_count{0};
+    double duration_ms{0.0};
+};
+
 struct ObservedInputEvidence {
     bool available{false};
     ObservedInputStreams streams{};
+    ActiveSessionEvidence session{};
 };
 
 struct WindowsMouseIdentity {
@@ -572,14 +585,10 @@ public:
     bool record(HRAWINPUT raw_input) {
         UINT size = 0;
         if (GetRawInputData(raw_input, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1) ||
-            size < sizeof(RAWINPUTHEADER)) {
-            return false;
-        }
+            size < sizeof(RAWINPUTHEADER)) return false;
 
         std::vector<BYTE> buffer(size);
-        if (GetRawInputData(
-                raw_input, RID_INPUT, buffer.data(), &size,
-                sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1)) {
+        if (GetRawInputData(raw_input, RID_INPUT, buffer.data(), &size, sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1)) {
             return false;
         }
 
@@ -602,32 +611,36 @@ public:
         device_paths_[raw->header.hDevice] = path;
 
         auto& timing = it->second;
-        const auto& mouse = raw->data.mouse;
-        const std::int32_t wheel_delta =
-            raw_mouse_has_wheel_event(mouse.usButtonFlags)
-                ? static_cast<std::int16_t>(mouse.usButtonData)
-                : 0;
-        const std::int32_t horizontal_wheel_delta =
-            (mouse.usButtonFlags & 0x0800u) != 0
-                ? static_cast<std::int16_t>(mouse.usButtonData)
-                : 0;
-
         const auto timestamp = static_cast<std::uint64_t>(now.QuadPart);
+        ensure_session(path, timing, timestamp);
+
+        const auto& mouse = raw->data.mouse;
         timing.all.accumulator.record(timestamp, frequency_ticks_);
         timing.all.record(timestamp, frequency_ticks_);
+
+        unsigned int classes = 0u;
         if (raw_mouse_has_movement(mouse.lLastX, mouse.lLastY)) {
             timing.movement.accumulator.record(timestamp, frequency_ticks_);
             timing.movement.record(timestamp, frequency_ticks_);
+            classes |= mouse_engine::observation::Movement;
         }
         if (raw_mouse_has_button_event(mouse.usButtonFlags)) {
             timing.button.accumulator.record(timestamp, frequency_ticks_);
             timing.button.record(timestamp, frequency_ticks_);
+            classes |= mouse_engine::observation::Button;
         }
         if (raw_mouse_has_wheel_event(mouse.usButtonFlags)) {
             timing.wheel.accumulator.record(timestamp, frequency_ticks_);
             timing.wheel.record(timestamp, frequency_ticks_);
+            classes |= mouse_engine::observation::Wheel;
         }
 
+        if (timing.session && timing.session->is_recording() && timing.session_start_ticks != 0) {
+            const double timestamp_ms =
+                static_cast<double>(timestamp - timing.session_start_ticks) * 1000.0 /
+                static_cast<double>(frequency_ticks_);
+            timing.session->record({timestamp_ms, classes});
+        }
         return true;
     }
 
@@ -635,13 +648,15 @@ public:
         if (!device) return;
         const auto it = device_paths_.find(device);
         if (it == device_paths_.end()) return;
-        per_device_.erase(it->second);
+        const auto timing = per_device_.find(it->second);
+        if (timing != per_device_.end()) {
+            finalize_session(timing->second);
+            per_device_.erase(timing);
+        }
         device_paths_.erase(it);
     }
 
-    bool snapshot_for(
-        const std::wstring& raw_path,
-        ObservedInputEvidence& out) const {
+    bool snapshot_for(const std::wstring& raw_path, ObservedInputEvidence& out) const {
         const auto it = per_device_.find(raw_path);
         if (it == per_device_.end()) return false;
 
@@ -655,6 +670,21 @@ public:
         it->second.movement.accumulator.snapshot(out.streams.movement.timing);
         it->second.button.accumulator.snapshot(out.streams.button.timing);
         it->second.wheel.accumulator.snapshot(out.streams.wheel.timing);
+
+        if (it->second.session && it->second.session->is_recording()) {
+            out.session.active = true;
+            out.session.id = it->second.session->session_id();
+            out.session.device_id = it->second.session->device_id();
+            out.session.started_at_utc = it->second.session->started_at_utc();
+            out.session.packet_count = it->second.session->packet_count();
+
+            LARGE_INTEGER now{};
+            if (QueryPerformanceCounter(&now) && frequency_ticks_ > 0 && it->second.session_start_ticks != 0) {
+                out.session.duration_ms = (std::max)(0.0,
+                    static_cast<double>(static_cast<std::uint64_t>(now.QuadPart) - it->second.session_start_ticks) *
+                    1000.0 / static_cast<double>(frequency_ticks_));
+            }
+        }
         return out.available;
     }
 
@@ -667,6 +697,7 @@ public:
     }
 
     void clear() {
+        for (auto& item : per_device_) finalize_session(item.second);
         per_device_.clear();
         device_paths_.clear();
         frequency_ticks_ = 0;
@@ -683,7 +714,64 @@ private:
         StreamTiming movement;
         StreamTiming button;
         StreamTiming wheel;
+        std::unique_ptr<mouse_engine::session::SessionCapture> session;
+        std::uint64_t session_start_ticks{0};
     };
+
+    static std::string utc_now_iso8601() {
+        FILETIME file_time{};
+        GetSystemTimePreciseAsFileTime(&file_time);
+        SYSTEMTIME system_time{};
+        if (!FileTimeToSystemTime(&file_time, &system_time)) return {};
+
+        std::ostringstream out;
+        out << std::setfill('0')
+            << std::setw(4) << system_time.wYear << '-'
+            << std::setw(2) << system_time.wMonth << '-'
+            << std::setw(2) << system_time.wDay << 'T'
+            << std::setw(2) << system_time.wHour << ':'
+            << std::setw(2) << system_time.wMinute << ':'
+            << std::setw(2) << system_time.wSecond << '.'
+            << std::setw(3) << system_time.wMilliseconds << 'Z';
+        return out.str();
+    }
+
+    static std::string session_device_id(const std::wstring& raw_path) {
+        const WindowsMouseIdentity identity = resolve_setupapi_identity(raw_path);
+        if (identity.resolved && !identity.instance_id.empty()) return wide_to_utf8(identity.instance_id);
+        return wide_to_utf8(raw_path);
+    }
+
+    void ensure_session(const std::wstring& raw_path, DeviceTiming& timing, std::uint64_t timestamp_ticks) {
+        if (timing.session && timing.session->is_recording()) return;
+
+        const auto paths = mouse_engine::workspace::WorkspacePaths::from_root(workspace_root());
+        timing.session = std::make_unique<mouse_engine::session::SessionCapture>(
+            mouse_engine::session::SessionStore(paths));
+
+        if (!timing.session->start(session_device_id(raw_path), utc_now_iso8601())) {
+            timing.session.reset();
+            timing.session_start_ticks = 0;
+            return;
+        }
+        timing.session_start_ticks = timestamp_ticks;
+    }
+
+    static void finalize_session(DeviceTiming& timing) {
+        if (!timing.session || !timing.session->is_recording()) {
+            timing.session.reset();
+            timing.session_start_ticks = 0;
+            return;
+        }
+
+        std::string error;
+        if (timing.session->stop(utc_now_iso8601(), nullptr, &error)) {
+            timing.session.reset();
+            timing.session_start_ticks = 0;
+        } else {
+            std::cerr << "session: unable to persist observation session: " << error << "\n";
+        }
+    }
 
     std::uint64_t frequency_ticks_{0};
     std::unordered_map<std::wstring, DeviceTiming> per_device_;

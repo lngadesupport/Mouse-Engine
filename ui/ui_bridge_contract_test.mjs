@@ -88,3 +88,8 @@ assert(source.includes('session-compare-a'), 'session comparison A');
 assert(source.includes('session-compare-b'), 'session comparison B');
 assert(source.includes('Paired session summary; descriptive deltas only; no winner inference.'), 'comparison methodology');
 assert(source.includes('snapshot.sessions.items'), 'session history snapshot contract');
+
+assert(source.includes('Persisted CDF comparison'), 'persisted CDF comparison surface');
+assert(source.includes('Anomaly Ledger'), 'anomaly ledger surface');
+assert(source.includes('Raw packet samples are not stored'), 'replay limitation disclosure');
+assert(source.includes('sequence-only') || source.includes('Sequence'), 'anomaly sequence disclosure');

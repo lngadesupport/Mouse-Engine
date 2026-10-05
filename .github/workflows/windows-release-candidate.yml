@@ -76,7 +76,7 @@ jobs:
           ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-environment
           ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-storage
           $snapshot = ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-snapshot | ConvertFrom-Json
-          if ($snapshot.schemaVersion -ne 1) { throw 'Snapshot schema version mismatch.' }
+          if ($snapshot.schemaVersion -ne 2) { throw 'Snapshot schema version mismatch.' }
           if ($snapshot.host.online -ne $true) { throw 'Host snapshot is not online.' }
           if ($snapshot.device.observationAvailable -isnot [bool]) { throw 'Device observation availability must be boolean.' }
           if ($snapshot.device.connected -isnot [bool]) { throw 'Device connection state must be boolean.' }
@@ -98,7 +98,10 @@ jobs:
             if ($identity.usbEndpoint.interruptInEndpointCount -isnot [int] -or $identity.usbEndpoint.interruptInEndpointCount -lt 0) { throw 'USB interrupt IN endpoint count must be a non-negative integer.' }
             if ($identity.usbEndpoint.configuredInterval.available -ne $false) { throw 'Configured interval must remain unavailable until a distinct host configuration evidence source exists.' }
             if ($identity.usbEndpoint.descriptorInterval.available -and ($identity.usbEndpoint.descriptorInterval.value -lt 0 -or $identity.usbEndpoint.descriptorInterval.value -gt 255)) { throw 'USB descriptor bInterval must be an unsigned byte.' }
-            if ($identity.usbEndpoint.observedInterval.available -ne $false) { throw 'Observed interval must remain unavailable until a measurement session exists.' }
+            if ($null -eq $identity.observedInput) { throw 'Resolved identity must carry observed input timing state.' }
+            if ($identity.observedInput.intervalCount -lt 0) { throw 'Observed interval count must be non-negative.' }
+            if ($identity.observedInput.minIntervalMs -lt 0 -or $identity.observedInput.medianIntervalMs -lt 0 -or $identity.observedInput.p95IntervalMs -lt 0 -or $identity.observedInput.maxIntervalMs -lt 0) { throw 'Observed timing values must be non-negative.' }
+            if ([string]::IsNullOrWhiteSpace($identity.observedInput.scope)) { throw 'Observed timing scope must be explicit.' }
           }
           if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
           Write-Output 'host_snapshot_contract: PASS'

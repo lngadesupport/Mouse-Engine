@@ -70,6 +70,14 @@ int main() {
     assert(store.save(empty_trace, &error));
     assert(error.empty());
 
+    mouse_engine::session::SessionTrace oversized_trace;
+    oversized_trace.session_id = "session-oversized";
+    oversized_trace.device_id = "device-1";
+    oversized_trace.packets.resize(mouse_engine::session::SessionTrace::kMaxPackets + 1);
+    error.clear();
+    assert(!store.save(oversized_trace, &error));
+    assert(!error.empty());
+
     fs::remove_all(root, ec);
     return 0;
 }

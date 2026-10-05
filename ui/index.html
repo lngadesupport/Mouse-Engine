@@ -276,13 +276,16 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         typeof item.observedInput.scope==='string' &&
         item.observedInput.streams && ['all','movement','button','wheel'].every(key=>{
           const stream=item.observedInput.streams[key];
+          const timing=stream && stream.timing;
           return stream &&
-            Number.isInteger(stream.intervalCount) && stream.intervalCount>=0 &&
-            typeof stream.minIntervalMs==='number' && stream.minIntervalMs>=0 &&
-            typeof stream.medianIntervalMs==='number' && stream.medianIntervalMs>=0 &&
-            typeof stream.p95IntervalMs==='number' && stream.p95IntervalMs>=0 &&
-            typeof stream.maxIntervalMs==='number' && stream.maxIntervalMs>=0 &&
-            typeof stream.jitterP95MinusMedianMs==='number' && stream.jitterP95MinusMedianMs>=0;
+            Number.isInteger(stream.packetCount) && stream.packetCount>=0 &&
+            timing &&
+            Number.isInteger(timing.intervalCount) && timing.intervalCount>=0 &&
+            typeof timing.minIntervalMs==='number' && timing.minIntervalMs>=0 &&
+            typeof timing.medianIntervalMs==='number' && timing.medianIntervalMs>=0 &&
+            typeof timing.p95IntervalMs==='number' && timing.p95IntervalMs>=0 &&
+            typeof timing.maxIntervalMs==='number' && timing.maxIntervalMs>=0 &&
+            typeof timing.jitterP95MinusMedianMs==='number' && timing.jitterP95MinusMedianMs>=0;
         })) &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
       snapshot.identity.transport==='per-device' &&
@@ -362,16 +365,18 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         const observed=resolved.observedInput;
         const streams=observed && observed.streams;
         const formatStream=(stream)=>{
-          if(!stream || stream.intervalCount<=0) return 'Not measured';
-          return `${stream.intervalCount} intervals · median ${stream.medianIntervalMs.toFixed(3)} ms · P95 ${stream.p95IntervalMs.toFixed(3)} ms`;
+          if(!stream || stream.packetCount<=0) return 'No packets observed';
+          const timing=stream.timing;
+          if(!timing || timing.intervalCount<=0) return `${stream.packetCount} packets · timing pending`;
+          return `${stream.packetCount} packets · median ${timing.medianIntervalMs.toFixed(3)} ms · P95 ${timing.p95IntervalMs.toFixed(3)} ms`;
         };
-        if(observed && observed.available && streams && streams.all.intervalCount>0){
+        if(observed && observed.available && streams && streams.all.packetCount>0){
           observedAll.textContent=formatStream(streams.all);
           observedMovement.textContent=formatStream(streams.movement);
           observedButton.textContent=formatStream(streams.button);
           observedWheel.textContent=formatStream(streams.wheel);
           latencyConfigured.textContent='Not exposed by this read-only path';
-          latencyObserved.textContent=`${streams.all.medianIntervalMs.toFixed(3)} ms median all-input inter-arrival`;
+          latencyObserved.textContent=`${streams.all.timing.medianIntervalMs.toFixed(3)} ms median all-input inter-arrival`;
         }else{
           observedAll.textContent='Not measured';
           observedMovement.textContent='Not measured';

@@ -46,6 +46,8 @@ int main() {
     const auto anomalies = detect_timing_irregularities(irregular);
     assert(anomalies.size() == 1);
     assert(anomalies.front().severity == "info");
+    assert(anomalies.front().packet_index == 32);
+    assert(std::abs(anomalies.front().timestamp_ms - 5000.0) < 1e-9);
     assert(anomalies.front().evidence.source == mouse_engine::model::EvidenceSource::RawInput);
 
     return 0;

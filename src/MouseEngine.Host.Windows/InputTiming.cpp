@@ -59,6 +59,15 @@ bool InputTimingAccumulator::snapshot(InputTimingSummary& out) const {
     out.max_interval_ms = sorted.back();
     out.jitter_p95_minus_median_ms =
         std::max(0.0, out.p95_interval_ms - out.median_interval_ms);
+
+    constexpr double kIdleGapThresholdMs = 50.0;
+    for (const double interval : intervals_ms_) {
+        if (interval >= kIdleGapThresholdMs) {
+            ++out.idle_gap_count_50ms;
+            out.longest_idle_gap_ms =
+                std::max(out.longest_idle_gap_ms, interval);
+        }
+    }
     return true;
 }
 

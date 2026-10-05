@@ -421,6 +421,8 @@ struct ActiveSessionEvidence {
     std::string started_at_utc;
     std::size_t packet_count{0};
     double duration_ms{0.0};
+    mouse_engine::model::TimingMeasurement timing{};
+    mouse_engine::model::TimingDistribution distribution{};
 };
 
 struct ObservedInputEvidence {
@@ -683,6 +685,9 @@ public:
             out.session.device_id = it->second.session->device_id();
             out.session.started_at_utc = it->second.session->started_at_utc();
             out.session.packet_count = it->second.session->packet_count();
+            const auto live_session = it->second.session->snapshot({});
+            out.session.timing = live_session.all.timing;
+            out.session.distribution = live_session.all.distribution;
 
             LARGE_INTEGER now{};
             if (QueryPerformanceCounter(&now) && frequency_ticks_ > 0 && it->second.session_start_ticks != 0) {
@@ -951,7 +956,22 @@ std::string snapshot_json() {
             << "\",\"startedAtUtc\":\"" << json_escape(identity.observed_input.session.started_at_utc)
             << "\",\"packetCount\":" << identity.observed_input.session.packet_count
             << ",\"durationMs\":" << identity.observed_input.session.duration_ms
-            << "}}}";alse }, \"observedInterval\": { \"available\": " << bool_json(raw_input_timing().any_available()) << " } },\n"
+            << ",\"timing\":{\"intervalCount\":" << identity.observed_input.session.timing.interval_count
+            << ",\"minIntervalMs\":" << identity.observed_input.session.timing.min_interval_ms
+            << ",\"medianIntervalMs\":" << identity.observed_input.session.timing.median_interval_ms
+            << ",\"p95IntervalMs\":" << identity.observed_input.session.timing.p95_interval_ms
+            << ",\"maxIntervalMs\":" << identity.observed_input.session.timing.max_interval_ms
+            << ",\"jitterP95MinusMedianMs\":" << identity.observed_input.session.timing.jitter_p95_minus_median_ms
+            << "},\"distribution\":{\"sampleCount\":" << identity.observed_input.session.distribution.sample_count
+            << ",\"meanIntervalMs\":" << identity.observed_input.session.distribution.mean_interval_ms
+            << ",\"bucketWidthMs\":" << identity.observed_input.session.distribution.bucket_width_ms
+            << ",\"buckets\":[";
+            for (std::size_t i = 0; i < identity.observed_input.session.distribution.buckets.size(); ++i) {
+                if (i != 0) {
+                    identity.observed_input_json_separator_placeholder();
+                }
+            }
+            << "]}}}alse }, \"observedInterval\": { \"available\": " << bool_json(raw_input_timing().any_available()) << " } },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";
     return out.str();

@@ -577,8 +577,8 @@ public:
         out.streams.movement.packet_count = it->second.movement.packet_count;
         out.streams.button.packet_count = it->second.button.packet_count;
         out.streams.wheel.packet_count = it->second.wheel.packet_count;
-        out.available =
-            it->second.all.accumulator.snapshot(out.streams.all.timing);
+        it->second.all.accumulator.snapshot(out.streams.all.timing);
+        out.available = out.streams.all.packet_count > 0;
         it->second.movement.accumulator.snapshot(out.streams.movement.timing);
         it->second.button.accumulator.snapshot(out.streams.button.timing);
         it->second.wheel.accumulator.snapshot(out.streams.wheel.timing);

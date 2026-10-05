@@ -4,6 +4,7 @@
 #include <devpkey.h>
 #include <initguid.h>
 #include <hidclass.h>
+#include <cfgmgr32.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <filesystem>
@@ -92,6 +93,87 @@ std::string environment_json() {
     return out.str();
 }
 
+enum class DirectTransport {
+    Unknown,
+    Usb,
+    Bluetooth
+};
+
+const char* direct_transport_json(DirectTransport transport) {
+    switch (transport) {
+    case DirectTransport::Usb: return "Usb";
+    case DirectTransport::Bluetooth: return "Bluetooth";
+    default: return "Unknown";
+    }
+}
+
+struct BusTopologyEvidence {
+    DirectTransport transport{DirectTransport::Unknown};
+    std::vector<std::wstring> ancestors;
+    std::wstring location_info;
+};
+
+bool starts_with_ci(const std::wstring& value, const wchar_t* prefix) {
+    const std::wstring wanted(prefix);
+    return value.size() >= wanted.size() &&
+        CompareStringOrdinal(value.data(), static_cast<int>(wanted.size()),
+                             wanted.data(), static_cast<int>(wanted.size()), TRUE) == CSTR_EQUAL;
+}
+
+BusTopologyEvidence inspect_bus_topology(DEVINST devinst) {
+    BusTopologyEvidence evidence;
+    DEVINST current = devinst;
+
+    for (unsigned depth = 0; depth < 32; ++depth) {
+        DEVINST parent = 0;
+        if (CM_Get_Parent(&parent, current, 0) != CR_SUCCESS) break;
+
+        wchar_t id_buffer[MAX_DEVICE_ID_LEN]{};
+        if (CM_Get_Device_IDW(parent, id_buffer, ARRAYSIZE(id_buffer), 0) == CR_SUCCESS) {
+            const std::wstring id(id_buffer);
+            evidence.ancestors.push_back(id);
+            if (starts_with_ci(id, L"USB\") && evidence.transport == DirectTransport::Unknown) {
+                evidence.transport = DirectTransport::Usb;
+            }
+            if ((starts_with_ci(id, L"BTH\") ||
+                 starts_with_ci(id, L"BTHENUM\") ||
+                 starts_with_ci(id, L"BTHLEDEVICE\")) &&
+                evidence.transport == DirectTransport::Unknown) {
+                evidence.transport = DirectTransport::Bluetooth;
+            }
+        }
+
+        wchar_t location[MAX_DEVICE_ID_LEN]{};
+        ULONG location_size = ARRAYSIZE(location);
+        ULONG property_type = 0;
+        if (CM_Get_DevNode_Registry_PropertyW(
+                parent, CM_DRP_LOCATION_INFORMATION, &property_type,
+                location, &location_size, 0) == CR_SUCCESS &&
+            location[0] != L'\0' &&
+            evidence.location_info.empty()) {
+            evidence.location_info = location;
+        }
+
+        current = parent;
+    }
+    return evidence;
+}
+
+std::uint64_t topology_hash(const BusTopologyEvidence& evidence) {
+    std::uint64_t hash = 1469598103934665603ULL;
+    const auto add = [&hash](wchar_t value) {
+        hash ^= static_cast<std::uint64_t>(value);
+        hash *= 1099511628211ULL;
+    };
+    for (const auto& ancestor : evidence.ancestors) {
+        for (const wchar_t c : ancestor) add(c);
+        add(L'|');
+    }
+    for (const wchar_t c : evidence.location_info) add(c);
+    add(static_cast<wchar_t>(evidence.transport));
+    return hash;
+}
+
 struct WindowsMouseIdentity {
     bool resolved{false};
     std::wstring interface_path;
@@ -101,6 +183,8 @@ struct WindowsMouseIdentity {
     std::wstring product;
     std::wstring vid;
     std::wstring pid;
+    DirectTransport transport{DirectTransport::Unknown};
+    std::uint64_t topology_hash{0};
 };
 
 std::wstring first_multi_sz(const std::vector<wchar_t>& buffer) {
@@ -226,6 +310,9 @@ WindowsMouseIdentity resolve_setupapi_identity(const std::wstring& raw_device_pa
         const std::wstring hardware_id = get_registry_property(set, device_data, SPDRP_HARDWAREID);
         identity.vid = extract_hardware_token(hardware_id, L"VID_");
         identity.pid = extract_hardware_token(hardware_id, L"PID_");
+        const BusTopologyEvidence topology = inspect_bus_topology(device_data.DevInst);
+        identity.transport = topology.transport;
+        identity.topology_hash = topology_hash(topology);
         break;
     }
 
@@ -326,7 +413,7 @@ std::string snapshot_json() {
     }
     out << "],\n"
         << "  \"identity\": { \"available\": " << bool_json(!mouse.identities.empty())
-        << ", \"transport\": \"undetermined\" },\n"
+        << ", \"transport\": \"per-device\" },\n"
         << "  \"latency\": { \"available\": false },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";

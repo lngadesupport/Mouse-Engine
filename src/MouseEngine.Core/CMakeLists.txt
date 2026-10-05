@@ -56,3 +56,11 @@ add_executable(MouseEngine.SessionCaptureTest
 target_link_libraries(MouseEngine.SessionCaptureTest PRIVATE MouseEngine.Core)
 target_compile_features(MouseEngine.SessionCaptureTest PRIVATE cxx_std_20)
 add_test(NAME MouseEngine.SessionCaptureTest COMMAND MouseEngine.SessionCaptureTest)
+
+
+add_executable(MouseEngine.ObservationDistributionTest
+    ObservationDistributionTest.cpp
+)
+target_link_libraries(MouseEngine.ObservationDistributionTest PRIVATE MouseEngine.Core)
+target_compile_features(MouseEngine.ObservationDistributionTest PRIVATE cxx_std_20)
+add_test(NAME MouseEngine.ObservationDistributionTest COMMAND MouseEngine.ObservationDistributionTest)

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <vector>
+#include <limits>
 
 int main() {
     using namespace mouse_engine::session;
@@ -51,6 +52,14 @@ int main() {
     const auto invalid_timeline = build_timeline(invalid, {}, 50.0);
     assert(!invalid_timeline.available);
     assert(invalid_timeline.events.empty());
+
+    const auto invalid_threshold = build_timeline(trace, {}, -1.0);
+    assert(!invalid_threshold.available);
+    assert(invalid_threshold.events.empty());
+
+    const auto nonfinite_threshold = build_timeline(trace, {}, std::numeric_limits<double>::quiet_NaN());
+    assert(!nonfinite_threshold.available);
+    assert(nonfinite_threshold.events.empty());
 
     return 0;
 }

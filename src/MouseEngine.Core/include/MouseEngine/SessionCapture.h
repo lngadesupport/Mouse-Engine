@@ -34,6 +34,10 @@ public:
         return recorder_.packet_count();
     }
 
+    model::ObservationSession snapshot(const std::string& observed_at_utc = {}) const {
+        return recorder_.snapshot(observed_at_utc);
+    }
+
     bool record(const observation::TimedPacket& packet) {
         return recorder_.record(packet);
     }

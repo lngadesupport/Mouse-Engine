@@ -148,7 +148,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         <article class="card section-card"><h3>Compatibility</h3><p>Compatibility records and confidence are resolved independently from the generic HID surface.</p><div class="metric muted">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Observed device detail</h3><p>Read-only fields from the Windows Raw Input device descriptor. These are observations, not configuration claims.</p><div class="cap-list"><div class="cap"><b>Buttons</b><span id="device-buttons-metric">Awaiting evidence</span></div><div class="cap"><b>Sample data rate</b><span id="device-sample-rate-metric">Awaiting evidence</span></div></div></article>
         <article class="card section-card"><h3>USB endpoint evidence</h3><p>The host queries the USB hub path without changing device state. Descriptor evidence is kept separate from configured and observed timing.</p><div class="cap-list"><div class="cap"><b>Connection</b><span id="device-usb-connection-metric">Awaiting evidence</span></div><div class="cap"><b>Interrupt IN endpoints</b><span id="device-usb-endpoint-count">Awaiting evidence</span></div><div class="cap"><b>Device reported</b><span id="device-usb-descriptor-interval">Awaiting evidence</span></div></div></article>
-        <article class="card section-card"><h3>Observed input timing</h3><p>Monotonic host arrival timing for Raw Input packets. Scope: WM_INPUT arrival inter-arrival. Streams are event-class evidence, not claimed device polling frequency.</p><div class="cap-list"><div class="cap"><b>All input</b><span id="device-observed-all">Not measured</span></div><div class="cap"><b>Movement stream</b><span id="device-observed-movement">Not measured</span></div><div class="cap"><b>Button events</b><span id="device-observed-button">Not measured</span></div><div class="cap"><b>Wheel events</b><span id="device-observed-wheel">Not measured</span></div></div></article>
+        <article class="card section-card"><h3>Observed input timing</h3><p>Monotonic host arrival timing for Raw Input packets. Scope: WM_INPUT arrival inter-arrival. Streams are event-class evidence, not claimed device polling frequency.</p><div class="cap-list"><div class="cap"><b>All input</b><span id="device-observed-all">Not measured</span></div><div class="cap"><b>Movement stream</b><span id="device-observed-movement">Not measured</span></div><div class="cap"><b>Button events</b><span id="device-observed-button">Not measured</span></div><div class="cap"><b>Wheel events</b><span id="device-observed-wheel">Not measured</span></div><div class="cap"><b>Active runs</b><span id="device-observed-active-runs">Not measured</span></div></div></article>
       </div>
     </section>
 
@@ -298,6 +298,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
           return stream &&
             Number.isInteger(stream.packetCount) && stream.packetCount>=0 &&
             timing &&
+            stream.activity &&
+            Number.isInteger(stream.activity.activeRunCount) && stream.activity.activeRunCount>=0 &&
+            Number.isInteger(stream.activity.longestActiveRunPackets) && stream.activity.longestActiveRunPackets>=0 &&
+            typeof stream.activity.longestActiveRunMs==='number' && stream.activity.longestActiveRunMs>=0 &&
             Number.isInteger(timing.intervalCount) && timing.intervalCount>=0 &&
             typeof timing.minIntervalMs==='number' && timing.minIntervalMs>=0 &&
             typeof timing.medianIntervalMs==='number' && timing.medianIntervalMs>=0 &&
@@ -337,6 +341,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
       observedMovement.textContent='Unavailable';
       observedButton.textContent='Unavailable';
       observedWheel.textContent='Unavailable';
+      document.getElementById('device-observed-active-runs').textContent='Unavailable';
       latencyConfigured.textContent='Not measured';
       latencyDescriptor.textContent='Not measured';
       latencyObserved.textContent='Not measured';
@@ -395,6 +400,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
           observedMovement.textContent=formatStream(streams.movement);
           observedButton.textContent=formatStream(streams.button);
           observedWheel.textContent=formatStream(streams.wheel);
+          const activity=streams.all.activity;
+          document.getElementById('device-observed-active-runs').textContent=activity
+            ? (activity.activeRunCount+' active runs · longest '+activity.longestActiveRunPackets+' packets')
+            : 'Activity pending';
           latencyConfigured.textContent='Not exposed by this read-only path';
           latencyObserved.textContent=streams.all.timing && streams.all.timing.intervalCount>0
             ? `${streams.all.timing.medianIntervalMs.toFixed(3)} ms median all-input inter-arrival`
@@ -404,6 +413,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
           observedMovement.textContent='Not measured';
           observedButton.textContent='Not measured';
           observedWheel.textContent='Not measured';
+      document.getElementById('device-observed-active-runs').textContent='Not measured';
           latencyConfigured.textContent='Not measured';
           latencyObserved.textContent='Not measured';
         }

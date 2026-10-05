@@ -13,3 +13,10 @@ add_executable(MouseEngine.WorkspaceModelTest
 target_link_libraries(MouseEngine.WorkspaceModelTest PRIVATE MouseEngine.Core)
 target_compile_features(MouseEngine.WorkspaceModelTest PRIVATE cxx_std_20)
 add_test(NAME MouseEngine.WorkspaceModelTest COMMAND MouseEngine.WorkspaceModelTest)
+
+add_executable(MouseEngine.ObservationAnalysisTest
+    ObservationAnalysisTest.cpp
+)
+target_link_libraries(MouseEngine.ObservationAnalysisTest PRIVATE MouseEngine.Core)
+target_compile_features(MouseEngine.ObservationAnalysisTest PRIVATE cxx_std_20)
+add_test(NAME MouseEngine.ObservationAnalysisTest COMMAND MouseEngine.ObservationAnalysisTest)

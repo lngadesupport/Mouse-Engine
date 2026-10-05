@@ -824,6 +824,13 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         sessionComparisonMethod.textContent='Select two distinct sessions with observed timing samples.';
         renderCdfComparison(a,b);
         renderAnomalyLedger(a);
+        replaySessionId='';
+        replayLoad.disabled=true;
+        replayPlay.disabled=true;
+        replayScrubber.disabled=true;
+        stopReplay();
+        loadedTrace=null;
+        replayState.textContent='Select two sessions to inspect an optional packet trace.';
         return;
       }
       sessionDeltaMedian.textContent=(b.medianIntervalMs-a.medianIntervalMs).toFixed(3)+' ms';

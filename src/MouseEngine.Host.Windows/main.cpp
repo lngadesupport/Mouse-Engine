@@ -757,7 +757,7 @@ private:
         timing.session_start_ticks = timestamp_ticks;
     }
 
-    static void finalize_session(DeviceTiming& timing) {
+    void finalize_session(DeviceTiming& timing) {
         if (!timing.session || !timing.session->is_recording()) {
             timing.session.reset();
             timing.session_start_ticks = 0;
@@ -770,12 +770,15 @@ private:
             timing.session_start_ticks = 0;
         } else {
             std::cerr << "session: unable to persist observation session: " << error << "\n";
+            pending_finalization_.push_back(std::move(timing.session));
+            timing.session_start_ticks = 0;
         }
     }
 
     std::uint64_t frequency_ticks_{0};
     std::unordered_map<std::wstring, DeviceTiming> per_device_;
     std::unordered_map<HANDLE, std::wstring> device_paths_;
+    std::vector<std::unique_ptr<mouse_engine::session::SessionCapture>> pending_finalization_;
 };
 
 RawInputTimingRegistry& raw_input_timing() {

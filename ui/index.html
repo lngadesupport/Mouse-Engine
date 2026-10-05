@@ -126,8 +126,8 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
     <section class="view" id="view-devices">
       <div class="empty card"><h2>Devices</h2><p>No device telemetry available. Device discovery remains read-only until a physical observation is supplied by the Windows host.</p></div>
       <div class="grid" style="margin-top:16px">
-        <article class="card section-card"><h3>Identity</h3><p>VID/PID, manufacturer, product, descriptor hash, protocol and physical/session identity will appear here when observed.</p><div class="metric muted">Awaiting evidence</div></article>
-        <article class="card section-card"><h3>Transport</h3><p>USB, Bluetooth or receiver correlation is classified only from evidence-backed topology.</p><div class="metric muted">Awaiting evidence</div></article>
+        <article class="card section-card"><h3>Identity</h3><p>VID/PID, manufacturer, product, descriptor hash, protocol and physical/session identity will appear here when observed.</p><div class="metric muted" id="device-identity-metric">Awaiting evidence</div></article>
+        <article class="card section-card"><h3>Transport</h3><p>USB, Bluetooth or receiver correlation is classified only from evidence-backed topology.</p><div class="metric muted" id="device-transport-metric">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Compatibility</h3><p>Compatibility records and confidence are resolved independently from the generic HID surface.</p><div class="metric muted">Awaiting evidence</div></article>
       </div>
     </section>
@@ -208,6 +208,8 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
   const snapshotPill=document.getElementById('snapshot-pill');
   const deviceState=document.getElementById('overview-device-state');
   const identityState=document.getElementById('evidence-identity-state');
+  const identityMetric=document.getElementById('device-identity-metric');
+  const transportMetric=document.getElementById('device-transport-metric');
 
   const activate=(name)=>{
     const target=document.getElementById('view-'+name);
@@ -227,7 +229,9 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
     return snapshot &&
       snapshot.schemaVersion===1 &&
       snapshot.host && snapshot.host.online===true &&
-      snapshot.device && typeof snapshot.device.connected==='boolean' &&
+      snapshot.device && snapshot.device.observationAvailable===true &&
+      typeof snapshot.device.connected==='boolean' &&
+      Number.isInteger(snapshot.device.mouseCount) && snapshot.device.mouseCount>=0 &&
       snapshot.latency && typeof snapshot.latency.available==='boolean' &&
       snapshot.mutation && snapshot.mutation.allowed===false;
   };
@@ -235,9 +239,12 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
   const applySnapshot=(snapshot)=>{
     if(!isValidSnapshot(snapshot)) return;
     const connected=snapshot.device.connected===true;
-    devicePill.textContent=connected ? 'Device telemetry available' : 'No device telemetry available';
-    deviceState.textContent=connected ? 'telemetry available' : 'awaiting evidence';
-    identityState.textContent=connected ? 'Device observed; identity resolution pending' : 'Awaiting device observation';
+    const count=snapshot.device.mouseCount;
+    devicePill.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
+    deviceState.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'no mouse observed';
+    identityState.textContent=connected ? `Raw Input observed ${count} mouse${count===1?'':'s'}; physical identity pending` : 'No mouse observation';
+    identityMetric.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
+    transportMetric.textContent='Awaiting topology evidence';
     snapshotPill.textContent='Host snapshot: received';
   };
 

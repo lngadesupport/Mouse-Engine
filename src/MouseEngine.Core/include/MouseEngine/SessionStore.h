@@ -109,7 +109,7 @@ private:
             return true;
         };
         const auto size_field = [&json](const char* key, std::size_t* value) {
-            const std::regex pattern(std::string("\\"") + key + "\\":([0-9]+)");
+            const std::regex pattern(std::string("\"") + key + "\":([0-9]+)");
             std::smatch match;
             if (!std::regex_search(json, match, pattern)) return false;
             try {
@@ -120,7 +120,7 @@ private:
             }
         };
         const auto double_field = [&json](const char* key, double* value) {
-            const std::regex pattern(std::string("\\"") + key + "\\":([-+]?[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)");
+            const std::regex pattern(std::string("\"") + key + "\":([-+]?[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)");
             std::smatch match;
             if (!std::regex_search(json, match, pattern)) return false;
             try {

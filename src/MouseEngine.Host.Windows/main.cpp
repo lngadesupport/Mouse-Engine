@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <algorithm>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <filesystem>

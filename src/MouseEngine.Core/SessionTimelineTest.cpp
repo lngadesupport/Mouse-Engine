@@ -27,7 +27,7 @@ int main() {
     anomaly.message = "Observed interval is materially longer than the session median.";
     anomaly.stream = "all";
     anomaly.packet_index = 2;
-    anomaly.timestamp_ms = 60.0;
+    anomaly.timestamp_ms = 9999.0;
 
     const auto timeline = build_timeline(trace, {anomaly}, 50.0);
     assert(timeline.available);

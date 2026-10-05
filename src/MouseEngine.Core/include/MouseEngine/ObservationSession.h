@@ -9,6 +9,8 @@
 
 namespace mouse_engine::model {
 
+inline constexpr double kDefaultIdleGapThresholdMs = 50.0;
+
 struct TimingMeasurement {
     std::size_t interval_count{0};
     double min_interval_ms{0.0};
@@ -29,7 +31,7 @@ struct ActivitySummary {
     std::size_t active_run_count{0};
     std::size_t longest_active_run_packets{0};
     double longest_active_run_ms{0.0};
-    double idle_gap_threshold_ms{50.0};
+    double idle_gap_threshold_ms{kDefaultIdleGapThresholdMs};
 };
 
 struct ObservationAnomaly {

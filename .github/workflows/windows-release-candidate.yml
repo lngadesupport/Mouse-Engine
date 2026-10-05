@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   windows-package:
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     timeout-minutes: 30
     env:
       WEBVIEW2_VERSION: '1.0.4258.31'

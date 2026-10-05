@@ -89,3 +89,25 @@ inline IntervalDistribution build_interval_distribution(
 }
 
 } // namespace mouse_engine::observation
+
+
+namespace mouse_engine::observation {
+
+inline model::TimingDistribution to_model_distribution(const IntervalDistribution& distribution) {
+    model::TimingDistribution result;
+    result.sample_count = distribution.sample_count;
+    result.mean_interval_ms = distribution.mean_interval_ms;
+    result.bucket_width_ms = distribution.bucket_width_ms;
+    result.buckets.reserve(distribution.buckets.size());
+    for (const auto& bucket : distribution.buckets) {
+        result.buckets.push_back({
+            bucket.lower_bound_ms,
+            bucket.upper_bound_ms,
+            bucket.count,
+            bucket.cumulative_fraction
+        });
+    }
+    return result;
+}
+
+} // namespace mouse_engine::observation

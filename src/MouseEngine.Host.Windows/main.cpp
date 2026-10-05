@@ -2,6 +2,7 @@
 #include "InputTiming.h"
 #include "RawInputClassification.h"
 #include "MouseEngine/Workspace.h"
+#include "MouseEngine/ObservationSession.h"
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
@@ -346,7 +347,7 @@ UsbEndpointEvidence inspect_usb_endpoint_evidence(const BusTopologyEvidence& top
 }
 
 struct ObservedInputStream {
-    static constexpr double kIdleGapThresholdMs = 50.0;
+    static constexpr double kIdleGapThresholdMs = mouse_engine::model::kDefaultIdleGapThresholdMs;
 
     std::size_t packet_count{0};
     mouse_engine::windows::InputTimingSummary timing{};

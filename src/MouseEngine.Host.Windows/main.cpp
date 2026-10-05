@@ -639,7 +639,13 @@ public:
             const double timestamp_ms =
                 static_cast<double>(timestamp - timing.session_start_ticks) * 1000.0 /
                 static_cast<double>(frequency_ticks_);
-            timing.session->record({timestamp_ms, classes});
+            if (!timing.session->record({timestamp_ms, classes})) {
+                finalize_session(timing);
+                ensure_session(path, timing, timestamp);
+                if (timing.session && timing.session->is_recording() && timing.session_start_ticks != 0) {
+                    timing.session->record({0.0, classes});
+                }
+            }
         }
         return true;
     }
@@ -698,6 +704,15 @@ public:
 
     void clear() {
         for (auto& item : per_device_) finalize_session(item.second);
+        for (auto it = pending_finalization_.begin(); it != pending_finalization_.end();) {
+            std::string error;
+            if ((*it)->stop(utc_now_iso8601(), nullptr, &error)) {
+                it = pending_finalization_.erase(it);
+            } else {
+                std::cerr << "session: retry still pending: " << error << "\n";
+                ++it;
+            }
+        }
         per_device_.clear();
         device_paths_.clear();
         frequency_ticks_ = 0;

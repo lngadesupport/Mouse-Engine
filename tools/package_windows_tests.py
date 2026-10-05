@@ -7,8 +7,8 @@ def main() -> int:
     manifest = json.loads((root / "packaging/RELEASE_MANIFEST.json").read_text(encoding="utf-8"))
     assert manifest["mutationDefault"] == "denied"
     assert manifest["architecture"] == "x64"
-    assert manifest["workspace"] == "%USERPROFILE%\\\\Documents\\\\Mouse Engine"
-    assert manifest["cache"] == "%LOCALAPPDATA%\\\\Mouse Engine"
+    assert manifest["workspace"] == "%USERPROFILE%\\Documents\\Mouse Engine"
+    assert manifest["cache"] == "%LOCALAPPDATA%\\Mouse Engine"
 
     required = [
         root / "Install-MouseEngine.cmd",

@@ -989,7 +989,9 @@ std::string session_history_json() {
                 << "\",\"severity\":\"" << json_escape(anomaly.severity)
                 << "\",\"type\":\"" << json_escape(anomaly.type)
                 << "\",\"message\":\"" << json_escape(anomaly.message)
-                << "\",\"stream\":\"" << json_escape(anomaly.stream) << "\"}";
+                << "\",\"stream\":\"" << json_escape(anomaly.stream)
+                << "\",\"packetIndex\":" << anomaly.packet_index
+                << ",\"timestampMs\":" << anomaly.timestamp_ms << "}";
         }
         out << "],\"complete\":" << bool_json(session.complete) << "}";
     }

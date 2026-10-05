@@ -124,9 +124,9 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
     </section>
 
     <section class="view" id="view-devices">
-      <div class="empty card"><h2>Devices</h2><p>No device telemetry available. Device discovery remains read-only until a physical observation is supplied by the Windows host.</p></div>
+      <div class="empty card"><h2>Devices</h2><p id="devices-summary">No device telemetry available. Device discovery remains read-only until a physical observation is supplied by the Windows host.</p></div>
       <div class="grid" style="margin-top:16px">
-        <article class="card section-card"><h3>Identity</h3><p>VID/PID, manufacturer, product, descriptor hash, protocol and physical/session identity will appear here when observed.</p><div class="metric muted" id="device-identity-metric">Awaiting evidence</div></article>
+        <article class="card section-card"><h3>Identity</h3><p>VID/PID, manufacturer, product and Windows identity are shown only when SetupAPI resolves the observed Raw Input interface.</p><div class="metric muted" id="device-identity-metric">Awaiting evidence</div><div class="cap-list" style="margin-top:12px"><div class="cap"><b>VID / PID</b><span id="device-vidpid-metric">Awaiting evidence</span></div><div class="cap"><b>Manufacturer / Product</b><span id="device-manufacturer-metric">Awaiting evidence</span></div><div class="cap"><b>Container ID</b><span id="device-container-metric">Awaiting evidence</span></div><div class="cap"><b>Instance ID</b><span id="device-instance-metric">Awaiting evidence</span></div></div></article>
         <article class="card section-card"><h3>Transport</h3><p>USB, Bluetooth or receiver correlation is classified only from evidence-backed topology.</p><div class="metric muted" id="device-transport-metric">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Compatibility</h3><p>Compatibility records and confidence are resolved independently from the generic HID surface.</p><div class="metric muted">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Observed device detail</h3><p>Read-only fields from the Windows Raw Input device descriptor. These are observations, not configuration claims.</p><div class="cap-list"><div class="cap"><b>Buttons</b><span id="device-buttons-metric">Awaiting evidence</span></div><div class="cap"><b>Sample data rate</b><span id="device-sample-rate-metric">Awaiting evidence</span></div></div></article>
@@ -207,6 +207,11 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
   const title=document.getElementById('page-title');
   const devicePill=document.getElementById('device-pill');
   const snapshotPill=document.getElementById('snapshot-pill');
+  const devicesSummary=document.getElementById('devices-summary');
+  const vidPidMetric=document.getElementById('device-vidpid-metric');
+  const manufacturerMetric=document.getElementById('device-manufacturer-metric');
+  const containerMetric=document.getElementById('device-container-metric');
+  const instanceMetric=document.getElementById('device-instance-metric');
   const deviceState=document.getElementById('overview-device-state');
   const identityState=document.getElementById('evidence-identity-state');
   const identityMetric=document.getElementById('device-identity-metric');
@@ -246,20 +251,41 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
     const count=snapshot.device.mouseCount;
     if(!available){
       devicePill.textContent='Device discovery unavailable';
+      devicesSummary.textContent='Windows Raw Input discovery is unavailable.';
       deviceState.textContent='discovery unavailable';
       identityState.textContent='Raw Input enumeration unavailable';
       identityMetric.textContent='Unavailable';
+      vidPidMetric.textContent='Unavailable';
+      manufacturerMetric.textContent='Unavailable';
+      containerMetric.textContent='Unavailable';
+      instanceMetric.textContent='Unavailable';
       buttonsMetric.textContent='Unavailable';
       sampleRateMetric.textContent='Unavailable';
     }else{
       devicePill.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
+      devicesSummary.textContent=connected ? `${count} mouse${count===1?'':'s'} observed through Windows Raw Input. Identity is resolved independently through SetupAPI.` : 'Windows Raw Input is available, but no mouse is currently observed.';
       deviceState.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'no mouse observed';
       identityState.textContent=connected ? `Raw Input observed ${count} mouse${count===1?'':'s'}; physical identity pending` : 'No mouse observation';
-      identityMetric.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
+      identityMetric.textContent=connected ? `${snapshot.device.identityResolvedCount} of ${count} identity records resolved` : 'No mouse observed';
       buttonsMetric.textContent=snapshot.device.detailAvailable ? `${snapshot.device.maxObservedButtons} observed` : 'Detail unavailable';
       sampleRateMetric.textContent=snapshot.device.detailAvailable ? `${snapshot.device.maxObservedSampleRate} data points/s` : 'Detail unavailable';
+      const resolved=snapshot.device.identities.find(item=>item && item.resolved===true);
+      if(resolved){
+        const vid=resolved.vid||'—';
+        const pid=resolved.pid||'—';
+        vidPidMetric.textContent=`${vid} / ${pid}`;
+        manufacturerMetric.textContent=[resolved.manufacturer,resolved.product].filter(Boolean).join(' / ')||'Not reported';
+        containerMetric.textContent=resolved.containerId||'Not reported';
+        instanceMetric.textContent=resolved.instanceId||'Not reported';
+        identityState.textContent='SetupAPI identity resolved; transport topology pending';
+      }else{
+        vidPidMetric.textContent='Identity pending';
+        manufacturerMetric.textContent='Identity pending';
+        containerMetric.textContent='Identity pending';
+        instanceMetric.textContent='Identity pending';
+      }
     }
-    transportMetric.textContent='Awaiting topology evidence';
+    transportMetric.textContent='Undetermined — topology evidence required';
     snapshotPill.textContent='Host snapshot: received';
   };
 

@@ -133,12 +133,12 @@ BusTopologyEvidence inspect_bus_topology(DEVINST devinst) {
         if (CM_Get_Device_IDW(parent, id_buffer, ARRAYSIZE(id_buffer), 0) == CR_SUCCESS) {
             const std::wstring id(id_buffer);
             evidence.ancestors.push_back(id);
-            if (starts_with_ci(id, L"USB\") && evidence.transport == DirectTransport::Unknown) {
+            if (starts_with_ci(id, LR"(USB\)") && evidence.transport == DirectTransport::Unknown) {
                 evidence.transport = DirectTransport::Usb;
             }
-            if ((starts_with_ci(id, L"BTH\") ||
-                 starts_with_ci(id, L"BTHENUM\") ||
-                 starts_with_ci(id, L"BTHLEDEVICE\")) &&
+            if ((starts_with_ci(id, LR"(BTH\)") ||
+                 starts_with_ci(id, LR"(BTHENUM\)") ||
+                 starts_with_ci(id, LR"(BTHLEDEVICE\)")) &&
                 evidence.transport == DirectTransport::Unknown) {
                 evidence.transport = DirectTransport::Bluetooth;
             }

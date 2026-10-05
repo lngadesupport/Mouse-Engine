@@ -5,6 +5,7 @@
 #include "MouseEngine/WorkspaceStore.h"
 #include "MouseEngine/ObservationSession.h"
 #include "MouseEngine/SessionCapture.h"
+#include "MouseEngine/SessionStore.h"
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
@@ -919,6 +920,36 @@ std::string timing_distribution_json(const mouse_engine::model::TimingDistributi
     return out.str();
 }
 
+std::string session_history_json() {
+    const auto paths = mouse_engine::workspace::WorkspacePaths::from_root(workspace_root());
+    mouse_engine::session::SessionStore store(paths);
+    std::string error;
+    const auto sessions = store.list(&error);
+
+    std::ostringstream out;
+    out << "{\"available\":" << bool_json(error.empty())
+        << ",\"items\":[";
+    for (std::size_t i = 0; i < sessions.size(); ++i) {
+        if (i != 0) out << ",";
+        const auto& session = sessions[i];
+        out << "{\"id\":\"" << json_escape(session.id)
+            << "\",\"deviceId\":\"" << json_escape(session.device_id)
+            << "\",\"startedAtUtc\":\"" << json_escape(session.started_at_utc)
+            << "\",\"endedAtUtc\":\"" << json_escape(session.ended_at_utc)
+            << "\",\"packetCount\":" << session.packet_count
+            << ",\"intervalCount\":" << session.interval_count
+            << ",\"medianIntervalMs\":" << session.median_interval_ms
+            << ",\"p95IntervalMs\":" << session.p95_interval_ms
+            << ",\"jitterP95MinusMedianMs\":" << session.jitter_p95_minus_median_ms
+            << ",\"idleGapCount50ms\":" << session.idle_gap_count_50ms
+            << ",\"activeRunCount\":" << session.active_run_count
+            << ",\"longestActiveRunPackets\":" << session.longest_active_run_packets
+            << ",\"complete\":" << bool_json(session.complete) << "}";
+    }
+    out << "]}";
+    return out.str();
+}
+
 std::string snapshot_json() {
     RawMouseObservation mouse = observe_raw_mice();
     for (auto& identity : mouse.identities) {
@@ -984,6 +1015,7 @@ std::string snapshot_json() {
             << "}},\"observedInterval\":{\"available\":"
             << bool_json(raw_input_timing().any_available())
             << "} },\n"
+        << "  \"sessions\": " << session_history_json() << ",\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";
     return out.str();

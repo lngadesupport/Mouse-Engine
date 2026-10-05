@@ -39,6 +39,15 @@ int main() {
     assert(loaded.packets[1].timestamp_ms == 1.25);
     assert(loaded.packets[1].classes == mouse_engine::observation::Button);
 
+    {
+        std::ofstream corrupt(store.path_for(trace.session_id), std::ios::binary | std::ios::trunc);
+        corrupt << "{\"schemaVersion\":1,\"sessionId\":\"session/trace-1\",\"deviceId\":\"device-1\",\"packetCount\":2,\"truncated\":false}\n";
+        corrupt << "not-a-packet\n";
+    }
+    error.clear();
+    assert(!store.load(trace.session_id, &loaded, &error));
+    assert(!error.empty());
+
     fs::remove_all(root, ec);
     return 0;
 }

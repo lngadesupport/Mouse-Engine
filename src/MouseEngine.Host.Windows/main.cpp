@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <algorithm>
+#include <cstdint>
 #include <setupapi.h>
 #include <devpkey.h>
 #include <initguid.h>

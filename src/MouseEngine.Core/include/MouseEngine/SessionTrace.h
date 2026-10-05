@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <utility>
 #include <vector>
@@ -104,12 +105,13 @@ inline ReplayResult build_replay(const SessionTrace& trace) {
     }
 
     const double origin = trace.packets.front().timestamp_ms;
-    if (origin < 0.0) return result;
+    if (!std::isfinite(origin) || origin < 0.0) return result;
 
     result.events.reserve(trace.packets.size());
     double previous = origin;
     for (const auto& packet : trace.packets) {
-        if (packet.timestamp_ms < previous) {
+        if (!std::isfinite(packet.timestamp_ms) || packet.timestamp_ms < 0.0 ||
+            packet.timestamp_ms < previous) {
             result.monotonic = false;
             result.events.clear();
             return result;

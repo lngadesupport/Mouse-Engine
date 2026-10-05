@@ -48,3 +48,11 @@ add_executable(MouseEngine.SessionStoreTest
 target_link_libraries(MouseEngine.SessionStoreTest PRIVATE MouseEngine.Core)
 target_compile_features(MouseEngine.SessionStoreTest PRIVATE cxx_std_20)
 add_test(NAME MouseEngine.SessionStoreTest COMMAND MouseEngine.SessionStoreTest)
+
+
+add_executable(MouseEngine.SessionCaptureTest
+    SessionCaptureTest.cpp
+)
+target_link_libraries(MouseEngine.SessionCaptureTest PRIVATE MouseEngine.Core)
+target_compile_features(MouseEngine.SessionCaptureTest PRIVATE cxx_std_20)
+add_test(NAME MouseEngine.SessionCaptureTest COMMAND MouseEngine.SessionCaptureTest)

@@ -926,13 +926,14 @@ std::string snapshot_json() {
             << ",\"movement\":" << timing_stream_json(identity.observed_input.streams.movement)
             << ",\"button\":" << timing_stream_json(identity.observed_input.streams.button)
             << ",\"wheel\":" << timing_stream_json(identity.observed_input.streams.wheel)
-            << "}}}";
-    }
-    out << "],\n"
-        << "  \"identity\": { \"available\": " << bool_json(!mouse.identities.empty())
-        << ", \"transport\": \"per-device\" },\n"
-        << "  \"latency\": { \"available\": " << bool_json(raw_input_timing().any_available())
-        << ", \"configuredInterval\": { \"available\": false }, \"descriptorInterval\": { \"available\": false }, \"observedInterval\": { \"available\": " << bool_json(raw_input_timing().any_available()) << " } },\n"
+            << "},\"session\":{\"active\":"
+            << bool_json(identity.observed_input.session.active)
+            << ",\"id\":\"" << json_escape(identity.observed_input.session.id)
+            << "\",\"deviceId\":\"" << json_escape(identity.observed_input.session.device_id)
+            << "\",\"startedAtUtc\":\"" << json_escape(identity.observed_input.session.started_at_utc)
+            << "\",\"packetCount\":" << identity.observed_input.session.packet_count
+            << ",\"durationMs\":" << identity.observed_input.session.duration_ms
+            << "}}}";alse }, \"observedInterval\": { \"available\": " << bool_json(raw_input_timing().any_available()) << " } },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";
     return out.str();

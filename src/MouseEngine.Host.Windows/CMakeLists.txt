@@ -8,6 +8,8 @@ add_executable(MouseEngine.Host.Windows WIN32
     main.cpp
     InputTiming.cpp
     InputTiming.h
+    RawInputClassification.cpp
+    RawInputClassification.h
 )
 
 target_compile_features(MouseEngine.Host.Windows PRIVATE cxx_std_20)
@@ -46,3 +48,13 @@ add_executable(MouseEngine.InputTimingTest
 target_compile_features(MouseEngine.InputTimingTest PRIVATE cxx_std_20)
 target_compile_definitions(MouseEngine.InputTimingTest PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 add_test(NAME MouseEngine.InputTimingTest COMMAND MouseEngine.InputTimingTest)
+
+
+add_executable(MouseEngine.RawInputClassificationTest
+    RawInputClassificationTest.cpp
+    RawInputClassification.cpp
+    RawInputClassification.h
+)
+target_compile_features(MouseEngine.RawInputClassificationTest PRIVATE cxx_std_20)
+target_compile_definitions(MouseEngine.RawInputClassificationTest PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+add_test(NAME MouseEngine.RawInputClassificationTest COMMAND MouseEngine.RawInputClassificationTest)

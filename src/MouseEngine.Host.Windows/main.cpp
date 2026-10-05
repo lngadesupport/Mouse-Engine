@@ -1173,15 +1173,18 @@ public:
     void resize(const RECT& bounds) { if (controller_) controller_->put_Bounds(bounds); }
 
 private:
-    HRESULT post_snapshot() {
+    HRESULT post_json(const std::string& json) {
         if (!webview_) return E_FAIL;
-        const std::string json = snapshot_json();
         const std::wstring wide(json.begin(), json.end());
         const HRESULT hr = webview_->PostWebMessageAsJson(wide.c_str());
         if (FAILED(hr)) {
-            show_native_fallback(hwnd_, L"Mouse Engine could not publish its read-only host snapshot to the UI.");
+            show_native_fallback(hwnd_, L"Mouse Engine could not publish its read-only host message to the UI.");
         }
         return hr;
+    }
+
+    HRESULT post_snapshot() {
+        return post_json(snapshot_json());
     }
 
     HRESULT navigation_completed(
@@ -1198,6 +1201,34 @@ private:
         const HRESULT snapshot = post_snapshot();
         if (SUCCEEDED(snapshot)) ui_ready_ = true;
         return snapshot;
+    }
+
+    HRESULT web_message_received(
+        ICoreWebView2*,
+        ICoreWebView2WebMessageReceivedEventArgs* args) {
+        if (!args) return E_INVALIDARG;
+
+        LPWSTR raw_json = nullptr;
+        HRESULT hr = args->get_WebMessageAsJson(&raw_json);
+        if (FAILED(hr) || raw_json == nullptr) return FAILED(hr) ? hr : E_INVALIDARG;
+
+        const std::wstring message(raw_json);
+        CoTaskMemFree(raw_json);
+
+        if (message.find(L"\"type\":\"sessionTraceRequest\"") == std::wstring::npos) return S_OK;
+
+        const std::wstring marker = L"\"sessionId\":\"";
+        const auto start = message.find(marker);
+        if (start == std::wstring::npos) return S_OK;
+        const auto value_start = start + marker.size();
+        const auto value_end = message.find(L'"', value_start);
+        if (value_end == std::wstring::npos) return S_OK;
+
+        const std::string session_id =
+            wide_to_utf8(message.substr(value_start, value_end - value_start));
+        if (session_id.empty()) return S_OK;
+
+        return post_json(session_trace_json(session_id));
     }
 
     HRESULT environment_ready(HRESULT result, ICoreWebView2Environment* environment) {
@@ -1245,6 +1276,15 @@ private:
             return hr;
         }
 
+        hr = webview_->add_WebMessageReceived(
+            Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+                this, &WebViewHost::web_message_received).Get(),
+            &web_message_received_token_);
+        if (FAILED(hr)) {
+            show_native_fallback(hwnd_, L"Mouse Engine could not register its read-only message observer.");
+            return hr;
+        }
+
         RECT bounds{};
         GetClientRect(hwnd_, &bounds);
         controller_->put_Bounds(bounds);
@@ -1268,6 +1308,7 @@ private:
     ComPtr<ICoreWebView2Controller> controller_;
     ComPtr<ICoreWebView2> webview_;
     EventRegistrationToken navigation_completed_token_{};
+    EventRegistrationToken web_message_received_token_{};
     bool ui_ready_{false};
 };
 #endif

@@ -901,6 +901,24 @@ std::string timing_stream_json(const ObservedInputStream& stream) {
     return out.str();
 }
 
+std::string timing_distribution_json(const mouse_engine::model::TimingDistribution& distribution) {
+    std::ostringstream out;
+    out << "{\"sampleCount\":" << distribution.sample_count
+        << ",\"meanIntervalMs\":" << distribution.mean_interval_ms
+        << ",\"bucketWidthMs\":" << distribution.bucket_width_ms
+        << ",\"buckets\":[";
+    for (std::size_t i = 0; i < distribution.buckets.size(); ++i) {
+        if (i != 0) out << ",";
+        const auto& bucket = distribution.buckets[i];
+        out << "{\"lowerBoundMs\":" << bucket.lower_bound_ms
+            << ",\"upperBoundMs\":" << bucket.upper_bound_ms
+            << ",\"count\":" << bucket.count
+            << ",\"cumulativeFraction\":" << bucket.cumulative_fraction << "}";
+    }
+    out << "]}";
+    return out.str();
+}
+
 std::string snapshot_json() {
     RawMouseObservation mouse = observe_raw_mice();
     for (auto& identity : mouse.identities) {
@@ -962,16 +980,10 @@ std::string snapshot_json() {
             << ",\"p95IntervalMs\":" << identity.observed_input.session.timing.p95_interval_ms
             << ",\"maxIntervalMs\":" << identity.observed_input.session.timing.max_interval_ms
             << ",\"jitterP95MinusMedianMs\":" << identity.observed_input.session.timing.jitter_p95_minus_median_ms
-            << "},\"distribution\":{\"sampleCount\":" << identity.observed_input.session.distribution.sample_count
-            << ",\"meanIntervalMs\":" << identity.observed_input.session.distribution.mean_interval_ms
-            << ",\"bucketWidthMs\":" << identity.observed_input.session.distribution.bucket_width_ms
-            << ",\"buckets\":[";
-            for (std::size_t i = 0; i < identity.observed_input.session.distribution.buckets.size(); ++i) {
-                if (i != 0) {
-                    identity.observed_input_json_separator_placeholder();
-                }
-            }
-            << "]}}}alse }, \"observedInterval\": { \"available\": " << bool_json(raw_input_timing().any_available()) << " } },\n"
+            << "},\"distribution\":" << timing_distribution_json(identity.observed_input.session.distribution)
+            << "}},\"observedInterval\":{\"available\":"
+            << bool_json(raw_input_timing().any_available())
+            << "} },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";
     return out.str();

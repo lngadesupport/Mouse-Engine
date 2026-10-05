@@ -1,4 +1,5 @@
 #include "MouseEngine/SessionStore.h"
+#include "MouseEngine/SessionTraceStore.h"
 
 #include <cassert>
 #include <filesystem>
@@ -39,6 +40,15 @@ int main() {
     assert(store.save(session, &error));
     assert(error.empty());
 
+    mouse_engine::session::SessionTrace trace;
+    trace.session_id = session.id;
+    trace.device_id = session.device_id;
+    trace.packets.push_back({0.0, mouse_engine::observation::Movement, 3, -2, 0, 0});
+    trace.packets.push_back({1.0, mouse_engine::observation::Button, 0, 0, 1, 0});
+    assert(mouse_engine::session::SessionTraceStore(
+        mouse_engine::workspace::WorkspacePaths::from_root(root)).save(trace, &error));
+    assert(error.empty());
+
     const auto path = store.path_for(session.id);
     assert(path.filename() == "session_unsafe.json");
     assert(fs::is_regular_file(path));
@@ -74,6 +84,8 @@ int main() {
     assert(summaries.front().anomalies.front().severity == "warning");
     assert(summaries.front().anomalies.front().type == "timing-gap");
     assert(summaries.front().anomalies.front().stream == "all");
+    assert(summaries.front().trace_available);
+    assert(summaries.front().trace_packet_count == 2);
 
     fs::remove_all(root, ec);
     return 0;

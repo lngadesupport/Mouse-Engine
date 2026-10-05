@@ -72,3 +72,9 @@ add_executable(MouseEngine.SessionComparisonTest
 target_link_libraries(MouseEngine.SessionComparisonTest PRIVATE MouseEngine.Core)
 target_compile_features(MouseEngine.SessionComparisonTest PRIVATE cxx_std_20)
 add_test(NAME MouseEngine.SessionComparisonTest COMMAND MouseEngine.SessionComparisonTest)
+add_executable(MouseEngine.SessionTraceTest
+    SessionTraceTest.cpp
+)
+target_link_libraries(MouseEngine.SessionTraceTest PRIVATE MouseEngine.Core)
+target_compile_features(MouseEngine.SessionTraceTest PRIVATE cxx_std_20)
+add_test(NAME MouseEngine.SessionTraceTest COMMAND MouseEngine.SessionTraceTest)

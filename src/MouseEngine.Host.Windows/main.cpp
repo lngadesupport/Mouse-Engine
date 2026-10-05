@@ -1,4 +1,5 @@
 #include <windows.h>
+#include "InputTiming.h"
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
@@ -19,6 +20,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 #include <windowsx.h>
 
@@ -321,6 +323,11 @@ UsbEndpointEvidence inspect_usb_endpoint_evidence(const BusTopologyEvidence& top
     return evidence;
 }
 
+struct ObservedInputEvidence {
+    bool available{false};
+    mouse_engine::windows::InputTimingSummary summary{};
+};
+
 struct WindowsMouseIdentity {
     bool resolved{false};
     std::wstring interface_path;
@@ -333,6 +340,7 @@ struct WindowsMouseIdentity {
     DirectTransport transport{DirectTransport::Unknown};
     std::uint64_t topology_hash{0};
     UsbEndpointEvidence usb_endpoint{};
+    ObservedInputEvidence observed_input{};
 };
 
 std::wstring first_multi_sz(const std::vector<wchar_t>& buffer) {
@@ -471,6 +479,66 @@ WindowsMouseIdentity resolve_setupapi_identity(const std::wstring& raw_device_pa
     return identity;
 }
 
+class RawInputTimingRegistry {
+public:
+    bool record(HRAWINPUT raw_input) {
+        UINT header_size = sizeof(RAWINPUTHEADER);
+        RAWINPUTHEADER header{};
+        if (GetRawInputData(
+                raw_input, RID_HEADER, &header, &header_size,
+                sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1) ||
+            header.dwType != RIM_TYPEMOUSE || header.hDevice == nullptr) {
+            return false;
+        }
+
+        const std::wstring path = raw_input_device_name(header.hDevice);
+        if (path.empty()) return false;
+
+        LARGE_INTEGER now{};
+        if (!QueryPerformanceCounter(&now)) return false;
+        if (frequency_ticks_ == 0) {
+            LARGE_INTEGER frequency{};
+            if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0) return false;
+            frequency_ticks_ = static_cast<std::uint64_t>(frequency.QuadPart);
+        }
+
+        auto [it, inserted] = per_device_.try_emplace(path);
+        (void)inserted;
+        it->second.record(
+            static_cast<std::uint64_t>(now.QuadPart),
+            frequency_ticks_);
+        return true;
+    }
+
+    void remove_device(HRAWINPUT device) {
+        if (!device) return;
+        const std::wstring path = raw_input_device_name(device);
+        if (!path.empty()) per_device_.erase(path);
+    }
+
+    bool snapshot_for(
+        const std::wstring& raw_path,
+        mouse_engine::windows::InputTimingSummary& summary) const {
+        const auto it = per_device_.find(raw_path);
+        if (it == per_device_.end()) return false;
+        return it->second.snapshot(summary);
+    }
+
+    void clear() {
+        per_device_.clear();
+        frequency_ticks_ = 0;
+    }
+
+private:
+    std::uint64_t frequency_ticks_{0};
+    std::unordered_map<std::wstring, mouse_engine::windows::InputTimingAccumulator> per_device_;
+};
+
+RawInputTimingRegistry& raw_input_timing() {
+    static RawInputTimingRegistry registry;
+    return registry;
+}
+
 struct RawMouseObservation {
     bool available{false};
     bool detail_available{false};
@@ -538,7 +606,11 @@ std::string wide_json_escape(const std::wstring& value) {
 }
 
 std::string snapshot_json() {
-    const RawMouseObservation mouse = observe_raw_mice();
+    RawMouseObservation mouse = observe_raw_mice();
+    for (auto& identity : mouse.identities) {
+        identity.observed_input.available =
+            raw_input_timing().snapshot_for(identity.interface_path, identity.observed_input.summary);
+    }
     std::ostringstream out;
     out << "{\n"
         << "  \"schemaVersion\": 1,\n"
@@ -573,7 +645,16 @@ std::string snapshot_json() {
             << ",\"value\":" << static_cast<unsigned>(identity.usb_endpoint.descriptor_interval)
             << ",\"endpointAddress\":" << static_cast<unsigned>(identity.usb_endpoint.descriptor_endpoint_address)
             << "}"
-            << ",\"observedInterval\":{\"available\":false}}}";
+            << ",\"observedInterval\":{\"available\":false}}"
+            << ",\"observedInput\":{\"available\":"
+            << bool_json(identity.observed_input.available)
+            << ",\"intervalCount\":" << identity.observed_input.summary.interval_count
+            << ",\"minIntervalMs\":" << identity.observed_input.summary.min_interval_ms
+            << ",\"medianIntervalMs\":" << identity.observed_input.summary.median_interval_ms
+            << ",\"p95IntervalMs\":" << identity.observed_input.summary.p95_interval_ms
+            << ",\"maxIntervalMs\":" << identity.observed_input.summary.max_interval_ms
+            << ",\"jitterP95MinusMedianMs\":" << identity.observed_input.summary.jitter_p95_minus_median_ms
+            << ",\"scope\":\"WM_INPUT arrival inter-arrival\"}}}";
     }
     out << "],\n"
         << "  \"identity\": { \"available\": " << bool_json(!mouse.identities.empty())
@@ -746,7 +827,7 @@ bool register_mouse_device_notifications(HWND hwnd) {
     RAWINPUTDEVICE mouse{};
     mouse.usUsagePage = 0x01;
     mouse.usUsage = 0x02;
-    mouse.dwFlags = RIDEV_DEVNOTIFY;
+    mouse.dwFlags = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
     mouse.hwndTarget = hwnd;
     return RegisterRawInputDevices(&mouse, 1, sizeof(mouse)) == TRUE;
 }
@@ -760,6 +841,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
         webview = new WebViewHost();
         register_mouse_device_notifications(hwnd);
+        SetTimer(hwnd, 1, 250, nullptr);
         if (!webview->initialize(hwnd, storage_root() / L"WebView2")) {
             delete webview; webview = nullptr;
             show_native_fallback(hwnd,L"WebView2 could not be initialized. Install the Microsoft Edge WebView2 Runtime, then restart Mouse Engine.");
@@ -770,13 +852,28 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 #endif
         return 0;
 
+    case WM_TIMER:
+        if (wparam == 1) {
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
+            if (webview && webview->ready()) webview->publish_snapshot();
+#endif
+        }
+        return 0;
+
     case WM_SIZE:
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
         if (webview && webview->ready()) { RECT bounds{}; GetClientRect(hwnd,&bounds); webview->resize(bounds); }
 #endif
         return 0;
 
+    case WM_INPUT:
+        raw_input_timing().record(reinterpret_cast<HRAWINPUT>(lparam));
+        return 0;
+
     case WM_INPUT_DEVICE_CHANGE:
+        if (wparam == GIDC_REMOVAL) {
+            raw_input_timing().remove_device(reinterpret_cast<HRAWINPUT>(lparam));
+        }
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
         if ((wparam == GIDC_ARRIVAL || wparam == GIDC_REMOVAL) && webview && webview->ready()) {
             webview->publish_snapshot();
@@ -785,6 +882,8 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
         return 0;
 
     case WM_DESTROY:
+        KillTimer(hwnd, 1);
+        raw_input_timing().clear();
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
         delete webview;
         webview = nullptr;

@@ -44,3 +44,9 @@ The product guarantees:
 The initial manifest uses schema version `1` and type `mouse-engine-workspace`.
 
 Future schema changes must use explicit migrations rather than silently changing file semantics.
+
+## Observation sessions
+
+Observation sessions use an explicit 50 ms idle-gap threshold for activity segmentation. An active run is a sequence of observed packets whose inter-arrival gaps remain below that threshold. A gap at or above the threshold starts a new run; it is not by itself a hardware-failure diagnosis.
+
+Session analysis records per-stream packet counts, timing summaries, active-run counts, longest active run and current-run duration. Timing irregularities are evidence records with an explicit method and scope rather than generic fault claims.

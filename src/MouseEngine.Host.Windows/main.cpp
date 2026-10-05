@@ -410,7 +410,9 @@ std::string snapshot_json() {
             << "\",\"manufacturer\":\"" << wide_json_escape(identity.manufacturer)
             << "\",\"product\":\"" << wide_json_escape(identity.product)
             << "\",\"vid\":\"" << wide_json_escape(identity.vid)
-            << "\",\"pid\":\"" << wide_json_escape(identity.pid) << "\"}";
+            << "\",\"pid\":\"" << wide_json_escape(identity.pid)
+            << "\",\"transport\":\"" << direct_transport_json(identity.transport)
+            << "\",\"topologyHash\":\"" << std::hex << identity.topology_hash << std::dec << "\"}";
     }
     out << "],\n"
         << "  \"identity\": { \"available\": " << bool_json(!mouse.identities.empty())

@@ -1180,6 +1180,50 @@ int self_test() {
         file << "Mouse Engine self-test\n";
     }
     std::filesystem::remove(probe, ec);
+
+    mouse_engine::session::SessionTrace trace;
+    trace.session_id = "self-test-session";
+    trace.device_id = "self-test-device";
+    trace.packets = {
+        {0.0, mouse_engine::observation::Movement, 1, 0, 0, 0},
+        {10.0, mouse_engine::observation::Movement, 1, 0, 0, 0},
+        {70.0, mouse_engine::observation::Button, 0, 0, 1, 0},
+    };
+
+    mouse_engine::model::ObservationAnomaly anomaly;
+    anomaly.id = "self-test-anomaly";
+    anomaly.severity = "info";
+    anomaly.type = "interval-outlier";
+    anomaly.message = "Self-test anomaly anchor.";
+    anomaly.stream = "all";
+    anomaly.packet_index = 2;
+    anomaly.timestamp_ms = 9999.0;
+
+    const auto timeline = mouse_engine::timeline::build_timeline(trace, {anomaly}, 50.0);
+    if (!timeline.available || timeline.events.size() != 7) {
+        std::cerr << "self-test: investigation timeline generation failed\n";
+        return 4;
+    }
+
+    bool found_anomaly = false;
+    bool found_idle_gap = false;
+    for (const auto& event : timeline.events) {
+        if (event.kind == mouse_engine::timeline::TimelineEventKind::Anomaly) {
+            found_anomaly =
+                event.packet_index == 2 &&
+                std::abs(event.offset_ms - 70.0) < 1e-9;
+        }
+        if (event.kind == mouse_engine::timeline::TimelineEventKind::IdleGap) {
+            found_idle_gap =
+                event.packet_index == 2 &&
+                std::abs(event.offset_ms - 70.0) < 1e-9;
+        }
+    }
+    if (!found_anomaly || !found_idle_gap) {
+        std::cerr << "self-test: timeline evidence anchoring failed\n";
+        return 4;
+    }
+
     std::cout << "status=PASS\n";
     return 0;
 }

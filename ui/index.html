@@ -240,6 +240,17 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
       snapshot.device && typeof snapshot.device.observationAvailable==='boolean' &&
       typeof snapshot.device.connected==='boolean' &&
       Number.isInteger(snapshot.device.mouseCount) && snapshot.device.mouseCount>=0 &&
+      Number.isInteger(snapshot.device.identityResolvedCount) && snapshot.device.identityResolvedCount>=0 &&
+      Array.isArray(snapshot.device.identities) &&
+      snapshot.device.identities.every(item=>item && typeof item.resolved==='boolean' &&
+        typeof item.instanceId==='string' &&
+        typeof item.containerId==='string' &&
+        typeof item.manufacturer==='string' &&
+        typeof item.product==='string' &&
+        typeof item.vid==='string' &&
+        typeof item.pid==='string') &&
+      snapshot.identity && typeof snapshot.identity.available==='boolean' &&
+      snapshot.identity.transport==='undetermined' &&
       snapshot.latency && typeof snapshot.latency.available==='boolean' &&
       snapshot.mutation && snapshot.mutation.allowed===false;
   };

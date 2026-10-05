@@ -14,7 +14,7 @@ int main() {
 
     mouse_engine::session::SessionCapture capture(
         mouse_engine::session::SessionStore(
-            mouse_engine::workspace::WorkspacePaths::from_root(root), true);
+            mouse_engine::workspace::WorkspacePaths::from_root(root)), true);
 
     assert(!capture.is_recording());
     assert(capture.start("device-instance-42", "2026-10-05T15:00:00Z"));

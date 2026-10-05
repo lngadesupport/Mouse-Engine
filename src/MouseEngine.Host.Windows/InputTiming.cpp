@@ -16,7 +16,6 @@ void InputTimingAccumulator::record(
 
     if (has_last_) {
         if (timestamp_ticks <= last_ticks_) {
-            last_ticks_ = timestamp_ticks;
             return;
         }
 

@@ -131,7 +131,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         <article class="card section-card"><h3>Compatibility</h3><p>Compatibility records and confidence are resolved independently from the generic HID surface.</p><div class="metric muted">Awaiting evidence</div></article>
         <article class="card section-card"><h3>Observed device detail</h3><p>Read-only fields from the Windows Raw Input device descriptor. These are observations, not configuration claims.</p><div class="cap-list"><div class="cap"><b>Buttons</b><span id="device-buttons-metric">Awaiting evidence</span></div><div class="cap"><b>Sample data rate</b><span id="device-sample-rate-metric">Awaiting evidence</span></div></div></article>
         <article class="card section-card"><h3>USB endpoint evidence</h3><p>The host queries the USB hub path without changing device state. Descriptor evidence is kept separate from configured and observed timing.</p><div class="cap-list"><div class="cap"><b>Connection</b><span id="device-usb-connection-metric">Awaiting evidence</span></div><div class="cap"><b>Interrupt IN endpoints</b><span id="device-usb-endpoint-count">Awaiting evidence</span></div><div class="cap"><b>Device reported</b><span id="device-usb-descriptor-interval">Awaiting evidence</span></div></div></article>
-        <article class="card section-card"><h3>Observed input timing</h3><p>Monotonic host arrival timing for Raw Input packets. Scope: WM_INPUT arrival inter-arrival. This is an observed input-stream statistic, not a claimed device polling frequency.</p><div class="cap-list"><div class="cap"><b>Intervals</b><span id="device-observed-count">Not measured</span></div><div class="cap"><b>Median</b><span id="device-observed-median">Not measured</span></div><div class="cap"><b>P95</b><span id="device-observed-p95">Not measured</span></div><div class="cap"><b>Jitter (P95 − median)</b><span id="device-observed-jitter">Not measured</span></div></div></article>
+        <article class="card section-card"><h3>Observed input timing</h3><p>Monotonic host arrival timing for Raw Input packets. Scope: WM_INPUT arrival inter-arrival. Streams are event-class evidence, not claimed device polling frequency.</p><div class="cap-list"><div class="cap"><b>All input</b><span id="device-observed-all">Not measured</span></div><div class="cap"><b>Movement stream</b><span id="device-observed-movement">Not measured</span></div><div class="cap"><b>Button events</b><span id="device-observed-button">Not measured</span></div><div class="cap"><b>Wheel events</b><span id="device-observed-wheel">Not measured</span></div></div></article>
       </div>
     </section>
 
@@ -224,10 +224,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
   const usbConnectionMetric=document.getElementById('device-usb-connection-metric');
   const usbEndpointCount=document.getElementById('device-usb-endpoint-count');
   const usbDescriptorInterval=document.getElementById('device-usb-descriptor-interval');
-  const observedCount=document.getElementById('device-observed-count');
-  const observedMedian=document.getElementById('device-observed-median');
-  const observedP95=document.getElementById('device-observed-p95');
-  const observedJitter=document.getElementById('device-observed-jitter');
+  const observedAll=document.getElementById('device-observed-all');
+  const observedMovement=document.getElementById('device-observed-movement');
+  const observedButton=document.getElementById('device-observed-button');
+  const observedWheel=document.getElementById('device-observed-wheel');
   const latencyConfigured=document.getElementById('latency-configured-interval');
   const latencyDescriptor=document.getElementById('latency-descriptor-interval');
   const latencyObserved=document.getElementById('latency-observed-interval');
@@ -273,13 +273,17 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         item.usbEndpoint.descriptorInterval && typeof item.usbEndpoint.descriptorInterval.available==='boolean' &&
         Number.isInteger(item.usbEndpoint.descriptorInterval.value) && item.usbEndpoint.descriptorInterval.value>=0 &&
         item.observedInput && typeof item.observedInput.available==='boolean' &&
-        Number.isInteger(item.observedInput.intervalCount) && item.observedInput.intervalCount>=0 &&
-        typeof item.observedInput.minIntervalMs==='number' && item.observedInput.minIntervalMs>=0 &&
-        typeof item.observedInput.medianIntervalMs==='number' && item.observedInput.medianIntervalMs>=0 &&
-        typeof item.observedInput.p95IntervalMs==='number' && item.observedInput.p95IntervalMs>=0 &&
-        typeof item.observedInput.maxIntervalMs==='number' && item.observedInput.maxIntervalMs>=0 &&
-        typeof item.observedInput.jitterP95MinusMedianMs==='number' && item.observedInput.jitterP95MinusMedianMs>=0 &&
-        typeof item.observedInput.scope==='string') &&
+        typeof item.observedInput.scope==='string' &&
+        item.observedInput.streams && ['all','movement','button','wheel'].every(key=>{
+          const stream=item.observedInput.streams[key];
+          return stream &&
+            Number.isInteger(stream.intervalCount) && stream.intervalCount>=0 &&
+            typeof stream.minIntervalMs==='number' && stream.minIntervalMs>=0 &&
+            typeof stream.medianIntervalMs==='number' && stream.medianIntervalMs>=0 &&
+            typeof stream.p95IntervalMs==='number' && stream.p95IntervalMs>=0 &&
+            typeof stream.maxIntervalMs==='number' && stream.maxIntervalMs>=0 &&
+            typeof stream.jitterP95MinusMedianMs==='number' && stream.jitterP95MinusMedianMs>=0;
+        })) &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
       snapshot.identity.transport==='per-device' &&
       snapshot.latency && typeof snapshot.latency.available==='boolean' &&
@@ -306,10 +310,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
       usbConnectionMetric.textContent='Unavailable';
       usbEndpointCount.textContent='Unavailable';
       usbDescriptorInterval.textContent='Unavailable';
-      observedCount.textContent='Unavailable';
-      observedMedian.textContent='Unavailable';
-      observedP95.textContent='Unavailable';
-      observedJitter.textContent='Unavailable';
+      observedAll.textContent='Unavailable';
+      observedMovement.textContent='Unavailable';
+      observedButton.textContent='Unavailable';
+      observedWheel.textContent='Unavailable';
       latencyConfigured.textContent='Not measured';
       latencyDescriptor.textContent='Not measured';
       latencyObserved.textContent='Not measured';
@@ -356,18 +360,23 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         }
 
         const observed=resolved.observedInput;
-        if(observed && observed.available && observed.intervalCount>0){
-          observedCount.textContent=`${observed.intervalCount} inter-arrival intervals`;
-          observedMedian.textContent=`${observed.medianIntervalMs.toFixed(3)} ms`;
-          observedP95.textContent=`${observed.p95IntervalMs.toFixed(3)} ms`;
-          observedJitter.textContent=`${observed.jitterP95MinusMedianMs.toFixed(3)} ms`;
+        const streams=observed && observed.streams;
+        const formatStream=(stream)=>{
+          if(!stream || stream.intervalCount<=0) return 'Not measured';
+          return `${stream.intervalCount} intervals · median ${stream.medianIntervalMs.toFixed(3)} ms · P95 ${stream.p95IntervalMs.toFixed(3)} ms`;
+        };
+        if(observed && observed.available && streams && streams.all.intervalCount>0){
+          observedAll.textContent=formatStream(streams.all);
+          observedMovement.textContent=formatStream(streams.movement);
+          observedButton.textContent=formatStream(streams.button);
+          observedWheel.textContent=formatStream(streams.wheel);
           latencyConfigured.textContent='Not exposed by this read-only path';
-          latencyObserved.textContent=`${observed.medianIntervalMs.toFixed(3)} ms median input inter-arrival`;
+          latencyObserved.textContent=`${streams.all.medianIntervalMs.toFixed(3)} ms median all-input inter-arrival`;
         }else{
-          observedCount.textContent='Not measured';
-          observedMedian.textContent='Not measured';
-          observedP95.textContent='Not measured';
-          observedJitter.textContent='Not measured';
+          observedAll.textContent='Not measured';
+          observedMovement.textContent='Not measured';
+          observedButton.textContent='Not measured';
+          observedWheel.textContent='Not measured';
           latencyConfigured.textContent='Not measured';
           latencyObserved.textContent='Not measured';
         }
@@ -379,10 +388,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         usbConnectionMetric.textContent='Identity pending';
         usbEndpointCount.textContent='Identity pending';
         usbDescriptorInterval.textContent='Identity pending';
-        observedCount.textContent='Not measured';
-        observedMedian.textContent='Not measured';
-        observedP95.textContent='Not measured';
-        observedJitter.textContent='Not measured';
+        observedAll.textContent='Not measured';
+        observedMovement.textContent='Not measured';
+        observedButton.textContent='Not measured';
+        observedWheel.textContent='Not measured';
         latencyConfigured.textContent='Not measured';
         latencyDescriptor.textContent='Not measured';
         latencyObserved.textContent='Not measured';
@@ -396,10 +405,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
       usbConnectionMetric.textContent='No mouse observed';
       usbEndpointCount.textContent='No mouse observed';
       usbDescriptorInterval.textContent='No mouse observed';
-      observedCount.textContent='Not measured';
-      observedMedian.textContent='Not measured';
-      observedP95.textContent='Not measured';
-      observedJitter.textContent='Not measured';
+      observedAll.textContent='Not measured';
+      observedMovement.textContent='Not measured';
+      observedButton.textContent='Not measured';
+      observedWheel.textContent='Not measured';
       latencyConfigured.textContent='Not measured';
       latencyDescriptor.textContent='Not measured';
       latencyObserved.textContent='Not measured';

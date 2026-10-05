@@ -731,7 +731,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         sessionDuration.textContent='—';
       }
     }
-    const renderInvestigationTimeline=(trace,session)=>{
+    const renderInvestigationTimeline=(trace,timeline)=>{
       sessionTimelineSummary.innerHTML='';
       sessionInvestigationTimeline.innerHTML='';
       if(!trace || !Array.isArray(trace.packets) || !trace.packets.length){
@@ -739,93 +739,32 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         sessionInvestigationTimeline.innerHTML='<div class="row"><span>No timeline loaded</span><span>Trace required</span><span>—</span></div>';
         return;
       }
-
-      const packets=trace.packets;
-      const origin=Number(packets[0].timestampMs);
-      if(!Number.isFinite(origin) || origin<0){
-        sessionTimelineSummary.innerHTML='<div class="cap"><b>Timeline</b><span>Trace timestamps are invalid.</span></div>';
+      if(!timeline || timeline.available!==true || !Array.isArray(timeline.events)){
+        sessionTimelineSummary.innerHTML='<div class="cap"><b>Timeline</b><span>Core timeline evidence unavailable.</span></div>';
+        sessionInvestigationTimeline.innerHTML='<div class="row"><span>No timeline loaded</span><span>Core evidence required</span><span>—</span></div>';
         return;
       }
 
-      const anomalies=Array.isArray(session?.anomalies)?session.anomalies:[];
-      const events=[{offsetMs:0,kind:'Session start',index:0,stream:'all',detail:'Observation began at the first persisted packet.'}];
-      let previous=origin;
-      let idleCount=0;
-
-      packets.forEach((packet,index)=>{
-        const timestamp=Number(packet.timestampMs);
-        if(!Number.isFinite(timestamp) || timestamp<previous) return;
-        const offset=timestamp-origin;
-        if(index>0 && timestamp-previous>=50){
-          idleCount++;
-          events.push({
-            offsetMs:offset,
-            kind:'Idle gap',
-            index,
-            stream:'all',
-            detail:'Observed gap ≥ 50 ms; segmentation evidence only.'
-          });
-        }
-        const classes=Number(packet.classes)||0;
-        const streams=[];
-        if(classes&1) streams.push('movement');
-        if(classes&2) streams.push('button');
-        if(classes&4) streams.push('wheel');
-        events.push({
-          offsetMs:offset,
-          kind:'Packet',
-          index,
-          stream:streams.join('+')||'all',
-          detail:'Persisted input packet · Δ '+(Number(packet.dx)||0)+' / '+(Number(packet.dy)||0)
-        });
-        previous=timestamp;
-      });
-
-      anomalies.forEach((anomaly)=>{
-        const packetIndex=Number(anomaly.packetIndex);
-        if(!Number.isInteger(packetIndex) || packetIndex<0 || packetIndex>=packets.length) return;
-        const timestamp=Number(packets[packetIndex].timestampMs);
-        if(!Number.isFinite(timestamp)) return;
-        events.push({
-          offsetMs:timestamp-origin,
-          kind:'Anomaly',
-          index:packetIndex,
-          stream:anomaly.stream||'all',
-          detail:(anomaly.severity||'info')+' · '+(anomaly.type||'anomaly')+' · '+(anomaly.message||'')
-        });
-      });
-
-      const lastTimestamp=Number(packets[packets.length-1].timestampMs);
-      if(Number.isFinite(lastTimestamp)){
-        events.push({
-          offsetMs:lastTimestamp-origin,
-          kind:'Session end',
-          index:packets.length-1,
-          stream:'all',
-          detail:'Last persisted packet reached.'
-        });
-      }
-
-      const priority={'Session start':0,'Packet':1,'Idle gap':2,'Anomaly':3,'Session end':4};
-      events.sort((a,b)=>a.offsetMs-b.offsetMs || priority[a.kind]-priority[b.kind] || a.index-b.index);
-
-      const packetCount=events.filter(e=>e.kind==='Packet').length;
-      const anomalyCount=events.filter(e=>e.kind==='Anomaly').length;
+      const events=timeline.events;
+      const packetCount=events.filter(e=>e.kind==='packet').length;
+      const anomalyCount=events.filter(e=>e.kind==='anomaly').length;
+      const idleCount=events.filter(e=>e.kind==='idleGap').length;
       sessionTimelineSummary.innerHTML=
         '<div class="cap"><b>Events</b><span>'+events.length+' total · '+packetCount+' packets · '+idleCount+' idle gaps · '+anomalyCount+' anomalies</span></div>'+
-        '<div class="cap"><b>Scope</b><span>Persisted trace · relative monotonic offsets · 50 ms segmentation threshold</span></div>';
+        '<div class="cap"><b>Scope</b><span>Core-generated timeline · persisted trace · relative monotonic offsets · 50 ms segmentation threshold</span></div>';
 
+      const labels={sessionStart:'Session start',packet:'Packet',idleGap:'Idle gap',anomaly:'Anomaly',sessionEnd:'Session end'};
       const limit=400;
-      const visible=events.slice(0,limit);
-      visible.forEach((event)=>{
+      events.slice(0,limit).forEach((event)=>{
         const row=document.createElement('div');
         row.className='row';
         const time=document.createElement('span');
-        time.textContent=event.offsetMs.toFixed(3)+' ms';
+        time.textContent=Number(event.offsetMs).toFixed(3)+' ms';
         const kind=document.createElement('span');
-        kind.textContent=event.kind+' · '+event.stream;
+        kind.textContent=(labels[event.kind]||event.kind)+' · '+(event.stream||'all');
         const detail=document.createElement('span');
-        detail.textContent='#'+event.index+' · '+event.detail;
+        const packetIndex=Number.isInteger(Number(event.packetIndex)) ? '#'+event.packetIndex+' · ' : '';
+        detail.textContent=packetIndex+(event.detail||event.message||'');
         row.append(time,kind,detail);
         sessionInvestigationTimeline.appendChild(row);
       });
@@ -1019,6 +958,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         if(message && message.type==='sessionTrace'){
           if(message.available===true && Array.isArray(message.packets)){
             renderTrace(message);
+            renderInvestigationTimeline(message, message.timeline);
           }else{
             replayState.textContent='Replay unavailable: '+(message.error || 'trace could not be loaded')+'.';
           }

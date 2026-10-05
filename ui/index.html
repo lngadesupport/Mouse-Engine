@@ -248,7 +248,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
 
   const isValidSnapshot=(snapshot)=>{
     return snapshot &&
-      snapshot.schemaVersion===1 &&
+      snapshot.schemaVersion===2 &&
       snapshot.host && snapshot.host.online===true &&
       snapshot.device && typeof snapshot.device.observationAvailable==='boolean' &&
       typeof snapshot.device.connected==='boolean' &&

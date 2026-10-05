@@ -697,6 +697,8 @@ std::string timing_summary_json(
         << ",\"p95IntervalMs\":" << summary.p95_interval_ms
         << ",\"maxIntervalMs\":" << summary.max_interval_ms
         << ",\"jitterP95MinusMedianMs\":" << summary.jitter_p95_minus_median_ms
+        << ",\"idleGapCount50ms\":" << summary.idle_gap_count_50ms
+        << ",\"longestIdleGapMs\":" << summary.longest_idle_gap_ms
         << "}";
     return out.str();
 }

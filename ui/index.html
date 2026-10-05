@@ -376,7 +376,9 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
           observedButton.textContent=formatStream(streams.button);
           observedWheel.textContent=formatStream(streams.wheel);
           latencyConfigured.textContent='Not exposed by this read-only path';
-          latencyObserved.textContent=`${streams.all.timing.medianIntervalMs.toFixed(3)} ms median all-input inter-arrival`;
+          latencyObserved.textContent=streams.all.timing && streams.all.timing.intervalCount>0
+            ? `${streams.all.timing.medianIntervalMs.toFixed(3)} ms median all-input inter-arrival`
+            : 'Observed packets; timing pending';
         }else{
           observedAll.textContent='Not measured';
           observedMovement.textContent='Not measured';

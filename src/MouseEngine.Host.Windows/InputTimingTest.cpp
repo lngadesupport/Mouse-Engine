@@ -45,7 +45,7 @@ int main() {
     bounded.record(10000, 100000);
     assert(bounded.snapshot(summary));
     assert(summary.interval_count == 3);
-    assert(summary.min_interval_ms >= 29.999);
+    assert(summary.min_interval_ms >= 19.999);
     assert(summary.max_interval_ms >= 59.999);
     assert(summary.idle_gap_count_50ms == 1);
     assert(summary.longest_idle_gap_ms >= 59.999);

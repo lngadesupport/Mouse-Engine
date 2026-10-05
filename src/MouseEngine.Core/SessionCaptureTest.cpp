@@ -14,7 +14,7 @@ int main() {
 
     mouse_engine::session::SessionCapture capture(
         mouse_engine::session::SessionStore(
-            mouse_engine::workspace::WorkspacePaths::from_root(root)));
+            mouse_engine::workspace::WorkspacePaths::from_root(root), true);
 
     assert(!capture.is_recording());
     assert(capture.start("device-instance-42", "2026-10-05T15:00:00Z"));
@@ -22,8 +22,8 @@ int main() {
     assert(capture.device_id() == "device-instance-42");
     assert(capture.packet_count() == 0);
 
-    assert(capture.record({100.0, mouse_engine::observation::Movement}));
-    assert(capture.record({110.0, mouse_engine::observation::Movement}));
+    assert(capture.record({100.0, mouse_engine::observation::Movement}, {100.0, mouse_engine::observation::Movement, 2, -1, 0, 0}));
+    assert(capture.record({110.0, mouse_engine::observation::Movement}, {110.0, mouse_engine::observation::Movement, 1, 1, 0, 0}));
     assert(capture.packet_count() == 2);
 
     std::string error;
@@ -36,6 +36,14 @@ int main() {
     assert(fs::is_regular_file(
         mouse_engine::session::SessionStore(
             mouse_engine::workspace::WorkspacePaths::from_root(root)).path_for(saved.id)));
+    assert(fs::is_regular_file(
+        mouse_engine::session::SessionTraceStore(
+            mouse_engine::workspace::WorkspacePaths::from_root(root)).path_for(saved.id)));
+    mouse_engine::session::SessionTrace loaded_trace;
+    assert(mouse_engine::session::SessionTraceStore(
+        mouse_engine::workspace::WorkspacePaths::from_root(root)).load(saved.id, &loaded_trace, &error));
+    assert(loaded_trace.packets.size() == 2);
+    assert(loaded_trace.packets.front().dx == 2);
 
     assert(!capture.stop("2026-10-05T15:00:02Z", nullptr, &error));
 
@@ -49,7 +57,7 @@ int main() {
         mouse_engine::session::SessionStore(
             mouse_engine::workspace::WorkspacePaths::from_root(blocked)));
     assert(failing.start("device-instance-43", "2026-10-05T15:01:00Z"));
-    assert(failing.record({100.0, mouse_engine::observation::Movement}));
+    assert(failing.record({100.0, mouse_engine::observation::Movement}, {100.0, mouse_engine::observation::Movement, 1, 0, 0, 0}));
     error.clear();
     assert(!failing.stop("2026-10-05T15:01:01Z", nullptr, &error));
     assert(failing.is_recording());

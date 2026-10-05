@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <system_error>
 
 namespace mouse_engine::session {

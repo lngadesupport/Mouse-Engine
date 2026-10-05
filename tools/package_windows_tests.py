@@ -7,6 +7,8 @@ def main() -> int:
     manifest = json.loads((root / "packaging/RELEASE_MANIFEST.json").read_text(encoding="utf-8"))
     assert manifest["mutationDefault"] == "denied"
     assert manifest["architecture"] == "x64"
+    assert manifest["workspace"] == "%USERPROFILE%\\\\Documents\\\\Mouse Engine"
+    assert manifest["cache"] == "%LOCALAPPDATA%\\\\Mouse Engine"
 
     required = [
         root / "Install-MouseEngine.cmd",
@@ -17,6 +19,13 @@ def main() -> int:
     ]
     for path in required:
         assert path.is_file(), path
+
+    install_script = (root / "packaging/install.ps1").read_text(encoding="utf-8")
+    uninstall_script = (root / "packaging/uninstall.ps1").read_text(encoding="utf-8")
+    assert "WORKSPACE=$env:USERPROFILE\\Documents\\Mouse Engine" in install_script
+    assert "CACHE=$env:LOCALAPPDATA\\Mouse Engine" in install_script
+    assert 'Join-Path $env:USERPROFILE "Documents\\Mouse Engine"' in uninstall_script
+    assert 'Join-Path $env:LOCALAPPDATA "Mouse Engine"' in uninstall_script
 
     with tempfile.TemporaryDirectory() as td:
         fixture = Path(td) / "MouseEngine.Host.Windows.exe"

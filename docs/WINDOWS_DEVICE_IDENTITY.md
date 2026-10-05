@@ -97,6 +97,8 @@ The native accumulator retains a bounded interval window and exposes:
 
 The measurement scope is explicitly **WM_INPUT arrival inter-arrival**. It is therefore evidence about the host-observed input stream, not a direct electrical/USB bus polling measurement.
 
+Each stream retains a packet count independently from its timing summary. This matters because a single observed packet proves activity but cannot establish an inter-arrival interval.
+
 The host also classifies packets into independently measured streams:
 
 - **All input** — every accepted mouse `WM_INPUT` packet;

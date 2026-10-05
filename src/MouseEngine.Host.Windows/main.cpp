@@ -7,6 +7,7 @@
 #include "MouseEngine/SessionCapture.h"
 #include "MouseEngine/SessionStore.h"
 #include "MouseEngine/SessionTraceStore.h"
+#include "MouseEngine/SessionTimeline.h"
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
@@ -999,12 +1000,24 @@ std::string session_history_json() {
     return out.str();
 }
 
+const char* timeline_event_kind_json(mouse_engine::timeline::TimelineEventKind kind) {
+    switch (kind) {
+    case mouse_engine::timeline::TimelineEventKind::SessionStart: return "sessionStart";
+    case mouse_engine::timeline::TimelineEventKind::Packet: return "packet";
+    case mouse_engine::timeline::TimelineEventKind::IdleGap: return "idleGap";
+    case mouse_engine::timeline::TimelineEventKind::Anomaly: return "anomaly";
+    case mouse_engine::timeline::TimelineEventKind::SessionEnd: return "sessionEnd";
+    default: return "unknown";
+    }
+}
+
 std::string session_trace_json(const std::string& session_id) {
     const auto paths = mouse_engine::workspace::WorkspacePaths::from_root(workspace_root());
-    mouse_engine::session::SessionTraceStore store(paths);
+    mouse_engine::session::SessionTraceStore trace_store(paths);
+    mouse_engine::session::SessionStore session_store(paths);
     mouse_engine::session::SessionTrace trace;
     std::string error;
-    const bool available = store.load(session_id, &trace, &error);
+    const bool available = trace_store.load(session_id, &trace, &error);
     std::ostringstream out;
     out << "{\"type\":\"sessionTrace\",\"sessionId\":\"" << json_escape(session_id)
         << "\",\"available\":" << bool_json(available);
@@ -1012,6 +1025,27 @@ std::string session_trace_json(const std::string& session_id) {
         out << ",\"error\":\"" << json_escape(error) << "\"}";
         return out.str();
     }
+
+    std::vector<mouse_engine::model::ObservationAnomaly> anomalies;
+    const auto summaries = session_store.list();
+    const auto summary_it = std::find_if(summaries.begin(), summaries.end(),
+        [&session_id](const auto& summary) { return summary.id == session_id; });
+    if (summary_it != summaries.end()) {
+        anomalies.reserve(summary_it->anomalies.size());
+        for (const auto& persisted : summary_it->anomalies) {
+            mouse_engine::model::ObservationAnomaly anomaly;
+            anomaly.id = persisted.id;
+            anomaly.severity = persisted.severity;
+            anomaly.type = persisted.type;
+            anomaly.message = persisted.message;
+            anomaly.stream = persisted.stream;
+            anomaly.packet_index = persisted.packet_index;
+            anomaly.timestamp_ms = persisted.timestamp_ms;
+            anomalies.push_back(std::move(anomaly));
+        }
+    }
+
+    const auto timeline = mouse_engine::timeline::build_timeline(trace, anomalies);
     out << ",\"schemaVersion\":" << trace.schema_version
         << ",\"deviceId\":\"" << json_escape(trace.device_id)
         << "\",\"truncated\":" << bool_json(trace.truncated)
@@ -1025,6 +1059,19 @@ std::string session_trace_json(const std::string& session_id) {
             << ",\"dy\":" << packet.dy
             << ",\"buttons\":" << packet.buttons
             << ",\"wheel\":" << packet.wheel << "}";
+    }
+    out << "],\"timelineAvailable\":" << bool_json(timeline.available)
+        << ",\"timeline\":[";
+    for (std::size_t i = 0; i < timeline.events.size(); ++i) {
+        if (i != 0) out << ",";
+        const auto& event = timeline.events[i];
+        out << "{\"offsetMs\":" << event.offset_ms
+            << ",\"kind\":\"" << timeline_event_kind_json(event.kind)
+            << "\",\"packetIndex\":" << event.packet_index
+            << ",\"stream\":\"" << json_escape(event.stream)
+            << "\",\"severity\":\"" << json_escape(event.severity)
+            << "\",\"type\":\"" << json_escape(event.type)
+            << "\",\"message\":\"" << json_escape(event.message) << "\"}";
     }
     out << "]}";
     return out.str();

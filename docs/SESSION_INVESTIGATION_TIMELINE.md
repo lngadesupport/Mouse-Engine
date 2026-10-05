@@ -1,6 +1,6 @@
 # Session Investigation Timeline
 
-The Session Investigation Timeline is a read-only analytical view derived from persisted evidence.
+The Session Investigation Timeline is a read-only analytical view derived from persisted evidence. Core `SessionTimeline` is the semantic authority for event construction; the Windows host serializes that result to the WebView2 UI, which only renders it.
 
 ## Evidence model
 
@@ -10,6 +10,8 @@ The timeline combines:
 - the existing 50 ms idle-gap segmentation threshold;
 - persisted anomaly records anchored to a packet index;
 - the same observed timing scope already used by the Timing Distribution Lab.
+
+The host loads the persisted session summary to recover anomaly anchors, converts those records into the Core anomaly model, and calls `build_timeline` against the persisted trace. The UI does not independently infer packet ordering, idle gaps, or anomaly placement.
 
 It does not reconstruct packets from histograms, CDFs, medians, P95, or any other aggregate statistic.
 

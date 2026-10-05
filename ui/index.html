@@ -716,7 +716,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         [sessionDeltaMedian,sessionDeltaP95,sessionDeltaJitter,sessionDeltaIdle,sessionDeltaRuns,sessionDeltaLongest].forEach(el=>el.textContent='—');
         sessionComparisonMethod.textContent='Select two distinct sessions with observed timing samples.';
         renderCdfComparison(a,b);
-      renderAnomalyLedger(a);
+        renderAnomalyLedger(a);
         return;
       }
       sessionDeltaMedian.textContent=(b.medianIntervalMs-a.medianIntervalMs).toFixed(3)+' ms';
@@ -727,6 +727,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
       sessionDeltaLongest.textContent=String(b.longestActiveRunPackets-a.longestActiveRunPackets)+' packets';
       sessionComparisonMethod.textContent='Paired session summary; descriptive deltas only; no winner inference.';
       renderCdfComparison(a,b);
+      renderAnomalyLedger(a);
     };
     sessionCompareA.addEventListener('change',()=>renderSessionComparison(lastSessions));
     sessionCompareB.addEventListener('change',()=>renderSessionComparison(lastSessions));

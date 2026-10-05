@@ -956,7 +956,17 @@ std::string session_history_json() {
                 << ",\"count\":" << bucket.count
                 << ",\"cumulativeFraction\":" << bucket.cumulative_fraction << "}";
         }
-        out << "]},\"complete\":" << bool_json(session.complete) << "}";
+        out << "]},\"anomalies\":[";
+        for (std::size_t anomaly_index = 0; anomaly_index < session.anomalies.size(); ++anomaly_index) {
+            if (anomaly_index != 0) out << ",";
+            const auto& anomaly = session.anomalies[anomaly_index];
+            out << "{\"id\":\"" << json_escape(anomaly.id)
+                << "\",\"severity\":\"" << json_escape(anomaly.severity)
+                << "\",\"type\":\"" << json_escape(anomaly.type)
+                << "\",\"message\":\"" << json_escape(anomaly.message)
+                << "\",\"stream\":\"" << json_escape(anomaly.stream) << "\"}";
+        }
+        out << "],\"complete\":" << bool_json(session.complete) << "}";
     }
     out << "]}";
     return out.str();

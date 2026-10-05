@@ -4,6 +4,8 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <utility>
 #include <string>
 #include <system_error>
 

@@ -141,7 +141,10 @@ public:
 
 private:
     HRESULT environment_ready(HRESULT result, ICoreWebView2Environment* environment) {
-        if (FAILED(result) || environment == nullptr) return result;
+        if (FAILED(result) || environment == nullptr) {
+            show_native_fallback(hwnd_, L"WebView2 Runtime could not be started. Install or repair the Microsoft Edge WebView2 Runtime, then restart Mouse Engine.");
+            return FAILED(result) ? result : E_FAIL;
+        }
         environment_ = environment;
         return environment_->CreateCoreWebView2Controller(
             hwnd_,
@@ -150,18 +153,31 @@ private:
     }
 
     HRESULT controller_ready(HRESULT result, ICoreWebView2Controller* controller) {
-        if (FAILED(result) || controller == nullptr) return result;
+        if (FAILED(result) || controller == nullptr) {
+            show_native_fallback(hwnd_, L"WebView2 could not create its browser controller. Install or repair the Microsoft Edge WebView2 Runtime, then restart Mouse Engine.");
+            return FAILED(result) ? result : E_FAIL;
+        }
         controller_ = controller;
         HRESULT hr = controller_->get_CoreWebView2(&webview_);
-        if (FAILED(hr) || !webview_) return hr;
+        if (FAILED(hr) || !webview_) {
+            show_native_fallback(hwnd_, L"Mouse Engine created the WebView2 controller but could not access the browser instance.");
+            return FAILED(hr) ? hr : E_FAIL;
+        }
         RECT bounds{};
         GetClientRect(hwnd_, &bounds);
         controller_->put_Bounds(bounds);
         const auto html = ui_entrypoint();
-        if (!std::filesystem::exists(html)) return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        if (!std::filesystem::exists(html)) {
+            show_native_fallback(hwnd_, L"Mouse Engine could not find its packaged UI file (ui\\index.html).");
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
         std::wstring uri = L"file:///";
         for (wchar_t c : html.wstring()) uri += (c == L'\\' ? L'/' : c);
-        return webview_->Navigate(uri.c_str());
+        const HRESULT navigation = webview_->Navigate(uri.c_str());
+        if (FAILED(navigation)) {
+            show_native_fallback(hwnd_, L"Mouse Engine could not navigate to its packaged UI.");
+        }
+        return navigation;
     }
 
     HWND hwnd_{};

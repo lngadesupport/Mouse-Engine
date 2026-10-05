@@ -66,7 +66,7 @@ const hostRequired = [
   'session_trace_json',
   'get_WebMessageAsJson',
   'add_WebMessageReceived',
-  'sessionTraceRequest'
+  'sessionTraceRequest', 'SessionTimeline', 'timelineAvailable', 'timeline_event_kind_json', 'timeline'
 ];
 
 for (const token of hostRequired) {
@@ -107,5 +107,6 @@ assert(ui.includes('Session Replay'), 'session replay surface');
 assert(ui.includes('session-replay-load'), 'session replay load control');
 assert(ui.includes('session-replay-scrubber'), 'session replay scrubber');
 assert(ui.includes('tracePacketCount'), 'trace packet count contract');
+assert(ui.includes('message.timeline'), 'Core timeline response contract');
 assert(ui.includes('Packet trace available'), 'replay limitation disclosure');
 assert(ui.includes('sequence-only') || ui.includes('Sequence'), 'anomaly sequence disclosure');

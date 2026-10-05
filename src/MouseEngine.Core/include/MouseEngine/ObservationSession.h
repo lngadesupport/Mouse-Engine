@@ -22,9 +22,24 @@ struct TimingMeasurement {
     double longest_idle_gap_ms{0.0};
 };
 
+struct DistributionBucket {
+    double lower_bound_ms{0.0};
+    double upper_bound_ms{0.0};
+    std::size_t count{0};
+    double cumulative_fraction{0.0};
+};
+
+struct TimingDistribution {
+    std::size_t sample_count{0};
+    double mean_interval_ms{0.0};
+    double bucket_width_ms{0.0};
+    std::vector<DistributionBucket> buckets;
+};
+
 struct ObservationStream {
     std::size_t packet_count{0};
     TimingMeasurement timing{};
+    TimingDistribution distribution{};
 };
 
 struct ActivitySummary {

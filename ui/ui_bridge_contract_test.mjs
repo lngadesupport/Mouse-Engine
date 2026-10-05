@@ -83,7 +83,7 @@ for (const token of ['window.chrome.webview', "addEventListener('message'", 'sch
   assert.ok(ui.includes(token), `missing WebView2 UI bridge contract: ${token}`);
 }
 
-assert.match(ui, /window\.chrome\.webview\.postMessage\(JSON\.stringify\(\{\s*type:'sessionTraceRequest'/);
+assert.match(ui, /window\.chrome\.webview\.postMessage\(\{\s*type:'sessionTraceRequest'/);
 console.log('WebView2 bridge contract PASS');
 
 assert(ui.includes('timing-distribution-chart'), 'Timing distribution UI must be present');

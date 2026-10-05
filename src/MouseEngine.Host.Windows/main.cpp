@@ -654,7 +654,7 @@ std::string snapshot_json() {
             << ",\"descriptorInterval\":{\"available\":" << bool_json(identity.usb_endpoint.descriptor_interval_available)
             << ",\"value\":" << static_cast<unsigned>(identity.usb_endpoint.descriptor_interval)
             << ",\"endpointAddress\":" << static_cast<unsigned>(identity.usb_endpoint.descriptor_endpoint_address)
-            << "}}"
+            << "}"
             << ",\"observedInput\":{\"available\":"
             << bool_json(identity.observed_input.available)
             << ",\"intervalCount\":" << identity.observed_input.summary.interval_count
@@ -663,7 +663,7 @@ std::string snapshot_json() {
             << ",\"p95IntervalMs\":" << identity.observed_input.summary.p95_interval_ms
             << ",\"maxIntervalMs\":" << identity.observed_input.summary.max_interval_ms
             << ",\"jitterP95MinusMedianMs\":" << identity.observed_input.summary.jitter_p95_minus_median_ms
-            << ",\"scope\":\"WM_INPUT arrival inter-arrival\"}}}";
+            << ",\"scope\":\"WM_INPUT arrival inter-arrival\"}}";
     }
     out << "],\n"
         << "  \"identity\": { \"available\": " << bool_json(!mouse.identities.empty())

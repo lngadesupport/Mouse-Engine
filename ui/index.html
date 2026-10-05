@@ -241,6 +241,16 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
           </div>
         </div>
         <div class="card section-card" style="margin-top:16px">
+          <h3>Investigation Timeline</h3>
+          <p>Unified view of persisted packet timing, 50 ms idle-gap evidence, and persisted anomaly markers. Offsets are relative to the first persisted packet; no packets are synthesized from statistics.</p>
+          <div id="session-timeline-summary" class="cap-list" style="margin-top:14px">
+            <div class="cap"><b>Timeline</b><span>Load a persisted trace to inspect evidence.</span></div>
+          </div>
+          <div class="table-like" id="session-investigation-timeline" style="margin-top:14px">
+            <div class="row"><span>No timeline loaded</span><span>Trace required</span><span>—</span></div>
+          </div>
+        </div>
+        <div class="card section-card" style="margin-top:16px">
           <h3>Anomaly Ledger</h3>
           <p>Persisted anomaly order is shown as a sequence. The current schema does not attach a timestamp to each anomaly, so this is deliberately not presented as a time-scaled timeline.</p>
           <div class="table-like" id="session-anomaly-ledger" style="margin-top:14px">
@@ -335,6 +345,8 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
   const sessionCdfComparison=document.getElementById('session-cdf-comparison');
   const sessionReplayState=document.getElementById('session-replay-state');
   const sessionAnomalyLedger=document.getElementById('session-anomaly-ledger');
+  const sessionTimelineSummary=document.getElementById('session-timeline-summary');
+  const sessionInvestigationTimeline=document.getElementById('session-investigation-timeline');
 
   const activate=(name)=>{
     const target=document.getElementById('view-'+name);
@@ -512,6 +524,8 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
     replayPlay.disabled=trace.packets.length===0;
     replayState.textContent='Trace loaded. '+trace.packets.length+' packets reconstructed locally'+(trace.truncated?' · capture was bounded/truncated.':'')+'.';
     renderReplayFrame(0);
+    const session=lastSessions.find(item=>item.id===trace.sessionId || item.id===replaySessionId);
+    renderInvestigationTimeline(trace,session);
   };
 
   const requestSessionTrace=(sessionId)=>{
@@ -717,6 +731,112 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         sessionDuration.textContent='—';
       }
     }
+    const renderInvestigationTimeline=(trace,session)=>{
+      sessionTimelineSummary.innerHTML='';
+      sessionInvestigationTimeline.innerHTML='';
+      if(!trace || !Array.isArray(trace.packets) || !trace.packets.length){
+        sessionTimelineSummary.innerHTML='<div class="cap"><b>Timeline</b><span>Persisted packet trace unavailable.</span></div>';
+        sessionInvestigationTimeline.innerHTML='<div class="row"><span>No timeline loaded</span><span>Trace required</span><span>—</span></div>';
+        return;
+      }
+
+      const packets=trace.packets;
+      const origin=Number(packets[0].timestampMs);
+      if(!Number.isFinite(origin) || origin<0){
+        sessionTimelineSummary.innerHTML='<div class="cap"><b>Timeline</b><span>Trace timestamps are invalid.</span></div>';
+        return;
+      }
+
+      const anomalies=Array.isArray(session?.anomalies)?session.anomalies:[];
+      const events=[{offsetMs:0,kind:'Session start',index:0,stream:'all',detail:'Observation began at the first persisted packet.'}];
+      let previous=origin;
+      let idleCount=0;
+
+      packets.forEach((packet,index)=>{
+        const timestamp=Number(packet.timestampMs);
+        if(!Number.isFinite(timestamp) || timestamp<previous) return;
+        const offset=timestamp-origin;
+        if(index>0 && timestamp-previous>=50){
+          idleCount++;
+          events.push({
+            offsetMs:offset,
+            kind:'Idle gap',
+            index,
+            stream:'all',
+            detail:'Observed gap ≥ 50 ms; segmentation evidence only.'
+          });
+        }
+        const classes=Number(packet.classes)||0;
+        const streams=[];
+        if(classes&1) streams.push('movement');
+        if(classes&2) streams.push('button');
+        if(classes&4) streams.push('wheel');
+        events.push({
+          offsetMs:offset,
+          kind:'Packet',
+          index,
+          stream:streams.join('+')||'all',
+          detail:'Persisted input packet · Δ '+(Number(packet.dx)||0)+' / '+(Number(packet.dy)||0)
+        });
+        previous=timestamp;
+      });
+
+      anomalies.forEach((anomaly)=>{
+        const packetIndex=Number(anomaly.packetIndex);
+        if(!Number.isInteger(packetIndex) || packetIndex<0 || packetIndex>=packets.length) return;
+        const timestamp=Number(packets[packetIndex].timestampMs);
+        if(!Number.isFinite(timestamp)) return;
+        events.push({
+          offsetMs:timestamp-origin,
+          kind:'Anomaly',
+          index:packetIndex,
+          stream:anomaly.stream||'all',
+          detail:(anomaly.severity||'info')+' · '+(anomaly.type||'anomaly')+' · '+(anomaly.message||'')
+        });
+      });
+
+      const lastTimestamp=Number(packets[packets.length-1].timestampMs);
+      if(Number.isFinite(lastTimestamp)){
+        events.push({
+          offsetMs:lastTimestamp-origin,
+          kind:'Session end',
+          index:packets.length-1,
+          stream:'all',
+          detail:'Last persisted packet reached.'
+        });
+      }
+
+      const priority={'Session start':0,'Packet':1,'Idle gap':2,'Anomaly':3,'Session end':4};
+      events.sort((a,b)=>a.offsetMs-b.offsetMs || priority[a.kind]-priority[b.kind] || a.index-b.index);
+
+      const packetCount=events.filter(e=>e.kind==='Packet').length;
+      const anomalyCount=events.filter(e=>e.kind==='Anomaly').length;
+      sessionTimelineSummary.innerHTML=
+        '<div class="cap"><b>Events</b><span>'+events.length+' total · '+packetCount+' packets · '+idleCount+' idle gaps · '+anomalyCount+' anomalies</span></div>'+
+        '<div class="cap"><b>Scope</b><span>Persisted trace · relative monotonic offsets · 50 ms segmentation threshold</span></div>';
+
+      const limit=400;
+      const visible=events.slice(0,limit);
+      visible.forEach((event)=>{
+        const row=document.createElement('div');
+        row.className='row';
+        const time=document.createElement('span');
+        time.textContent=event.offsetMs.toFixed(3)+' ms';
+        const kind=document.createElement('span');
+        kind.textContent=event.kind+' · '+event.stream;
+        const detail=document.createElement('span');
+        detail.textContent='#'+event.index+' · '+event.detail;
+        row.append(time,kind,detail);
+        sessionInvestigationTimeline.appendChild(row);
+      });
+      if(events.length>limit){
+        const row=document.createElement('div');
+        row.className='row';
+        row.innerHTML='<span>Display capped</span><span>'+limit+' of '+events.length+'</span><span>Use replay scrubber for packet-level inspection.</span>';
+        sessionInvestigationTimeline.appendChild(row);
+      }
+    };
+
     const renderAnomalyLedger=(session)=>{
       sessionAnomalyLedger.innerHTML='';
       const anomalies=session?.anomalies||[];
@@ -851,6 +971,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         stopReplay();
         loadedTrace=null;
         replayState.textContent='Replay unavailable: neither selected session has a persisted packet trace.';
+        renderInvestigationTimeline(null,null);
       }else{
         replayState.textContent='Packet trace available for '+replaySession.id+' ('+replaySession.tracePacketCount+' packets). Load it for deterministic replay.';
       }

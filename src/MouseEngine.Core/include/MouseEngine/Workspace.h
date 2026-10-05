@@ -36,7 +36,7 @@ struct WorkspacePaths {
     }
 };
 
-inline bool is_workspace_path_safe(const std::filesystem::path& root) {
+inline bool is_workspace_root_shape_valid(const std::filesystem::path& root) {
     return !root.empty() && root.filename() == kWorkspaceDirectoryName;
 }
 

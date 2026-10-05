@@ -24,12 +24,16 @@ int main() {
     assert(std::abs(summary.p95_interval_ms - 10.0) < 0.001);
     assert(std::abs(summary.max_interval_ms - 10.0) < 0.001);
     assert(std::abs(summary.jitter_p95_minus_median_ms) < 0.001);
+    assert(summary.idle_gap_count_50ms == 0);
+    assert(std::abs(summary.longest_idle_gap_ms) < 0.001);
 
     timing.record(8000, 100000);
     assert(timing.snapshot(summary));
     assert(summary.interval_count == 6);
     assert(summary.max_interval_ms >= 19.999);
     assert(summary.p95_interval_ms >= 10.0);
+    assert(summary.idle_gap_count_50ms == 1);
+    assert(summary.longest_idle_gap_ms >= 19.999);
 
     InputTimingAccumulator bounded(3);
     bounded.record(1000, 100000);
@@ -42,6 +46,8 @@ int main() {
     assert(summary.interval_count == 3);
     assert(summary.min_interval_ms >= 19.999);
     assert(summary.max_interval_ms >= 39.999);
+    assert(summary.idle_gap_count_50ms == 2);
+    assert(summary.longest_idle_gap_ms >= 39.999);
 
     InputTimingAccumulator empty(4);
     assert(!empty.snapshot(summary));

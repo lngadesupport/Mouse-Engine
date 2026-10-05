@@ -506,6 +506,7 @@ public:
 
         auto [it, inserted] = per_device_.try_emplace(path);
         (void)inserted;
+        device_paths_[header.hDevice] = path;
         it->second.record(
             static_cast<std::uint64_t>(now.QuadPart),
             frequency_ticks_);
@@ -514,8 +515,10 @@ public:
 
     void remove_device(HRAWINPUT device) {
         if (!device) return;
-        const std::wstring path = raw_input_device_name(device);
-        if (!path.empty()) per_device_.erase(path);
+        const auto it = device_paths_.find(device);
+        if (it == device_paths_.end()) return;
+        per_device_.erase(it->second);
+        device_paths_.erase(it);
     }
 
     bool snapshot_for(
@@ -536,12 +539,14 @@ public:
 
     void clear() {
         per_device_.clear();
+        device_paths_.clear();
         frequency_ticks_ = 0;
     }
 
 private:
     std::uint64_t frequency_ticks_{0};
     std::unordered_map<std::wstring, mouse_engine::windows::InputTimingAccumulator> per_device_;
+    std::unordered_map<HANDLE, std::wstring> device_paths_;
 };
 
 RawInputTimingRegistry& raw_input_timing() {

@@ -291,9 +291,12 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         containerMetric.textContent=resolved.containerId||'Not reported';
         instanceMetric.textContent=resolved.instanceId||'Not reported';
         identityState.textContent='SetupAPI identity resolved; transport evidence classified conservatively';
-        transportMetric.textContent=resolved.transport==='Unknown'
+        const transports=[...new Set(snapshot.device.identities.filter(item=>item && item.resolved).map(item=>item.transport))];
+        transportMetric.textContent=transports.length===0
           ? 'Unknown — insufficient direct bus evidence'
-          : resolved.transport+' — direct ancestry evidence';
+          : transports.length===1
+            ? transports[0]+' — direct ancestry evidence'
+            : 'Mixed — per-device direct ancestry evidence';
       }else{
         vidPidMetric.textContent='Identity pending';
         manufacturerMetric.textContent='Identity pending';

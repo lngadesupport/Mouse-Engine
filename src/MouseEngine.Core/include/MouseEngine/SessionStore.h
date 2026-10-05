@@ -20,6 +20,8 @@ struct SessionAnomalySummary {
     std::string type;
     std::string message;
     std::string stream;
+    std::size_t packet_index{0};
+    double timestamp_ms{0.0};
 };
 
 struct SessionSummary {
@@ -208,7 +210,9 @@ private:
                     "\\\"severity\\\":\\\"([^\\\"]*)\\\","
                     "\\\"type\\\":\\\"([^\\\"]*)\\\","
                     "\\\"message\\\":\\\"([^\\\"]*)\\\","
-                    "\\\"stream\\\":\\\"([^\\\"]*)\\\"\\}");
+                    "\\\"stream\\\":\\\"([^\\\"]*)\\\","
+                    "\\\"packetIndex\\\":([0-9]+),"
+                    "\\\"timestampMs\\\":([-+]?[0-9]+(?:\\\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)\\\}");
                 for (std::sregex_iterator it(anomaly_json.begin(), anomaly_json.end(), anomaly_pattern), end; it != end; ++it) {
                     SessionAnomalySummary anomaly;
                     anomaly.id = (*it)[1].str();
@@ -216,7 +220,14 @@ private:
                     anomaly.type = (*it)[3].str();
                     anomaly.message = (*it)[4].str();
                     anomaly.stream = (*it)[5].str();
+                    try {
+                        anomaly.packet_index = static_cast<std::size_t>(std::stoull((*it)[6].str()));
+                        anomaly.timestamp_ms = std::stod((*it)[7].str());
+                    } catch (...) {
+                        continue;
+                    }
                     summary->anomalies.push_back(std::move(anomaly));
+                }
                 }
             }
         }

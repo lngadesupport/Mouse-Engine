@@ -521,10 +521,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
       return;
     }
     replayState.textContent='Requesting read-only trace…';
-    window.chrome.webview.postMessage(JSON.stringify({
+    window.chrome.webview.postMessage({
       type:'sessionTraceRequest',
       sessionId
-    }));
+    });
   };
 
 

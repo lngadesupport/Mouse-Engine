@@ -248,9 +248,11 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         typeof item.manufacturer==='string' &&
         typeof item.product==='string' &&
         typeof item.vid==='string' &&
-        typeof item.pid==='string') &&
+        typeof item.pid==='string' &&
+        typeof item.transport==='string' &&
+        typeof item.topologyHash==='string') &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
-      snapshot.identity.transport==='undetermined' &&
+      snapshot.identity.transport==='per-device' &&
       snapshot.latency && typeof snapshot.latency.available==='boolean' &&
       snapshot.mutation && snapshot.mutation.allowed===false;
   };
@@ -288,7 +290,10 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         manufacturerMetric.textContent=[resolved.manufacturer,resolved.product].filter(Boolean).join(' / ')||'Not reported';
         containerMetric.textContent=resolved.containerId||'Not reported';
         instanceMetric.textContent=resolved.instanceId||'Not reported';
-        identityState.textContent='SetupAPI identity resolved; transport topology pending';
+        identityState.textContent='SetupAPI identity resolved; transport evidence classified conservatively';
+        transportMetric.textContent=resolved.transport==='Unknown'
+          ? 'Unknown — insufficient direct bus evidence'
+          : resolved.transport+' — direct ancestry evidence';
       }else{
         vidPidMetric.textContent='Identity pending';
         manufacturerMetric.textContent='Identity pending';
@@ -296,7 +301,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
         instanceMetric.textContent='Identity pending';
       }
     }
-    transportMetric.textContent='Undetermined — topology evidence required';
+    if(!connected) transportMetric.textContent='No device topology evidence';
     snapshotPill.textContent='Host snapshot: received';
   };
 

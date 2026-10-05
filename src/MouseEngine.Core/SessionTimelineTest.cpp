@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 #include <limits>
+#include <string>
 
 int main() {
     using namespace mouse_engine::session;
@@ -28,6 +29,8 @@ int main() {
     anomaly.stream = "all";
     anomaly.packet_index = 2;
     anomaly.timestamp_ms = 9999.0;
+
+    assert(std::string(stream_name(observation::Movement | observation::Button | observation::Wheel)) == "movement+button+wheel");
 
     const auto timeline = build_timeline(trace, {anomaly}, 50.0);
     assert(timeline.available);

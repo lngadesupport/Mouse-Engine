@@ -3,6 +3,7 @@
 #include "ObservationSession.h"
 #include "SessionTrace.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <string>

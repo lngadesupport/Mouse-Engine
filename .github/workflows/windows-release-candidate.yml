@@ -105,6 +105,8 @@ jobs:
               if ($null -eq $stream) { throw "Observed input stream missing: $streamName" }
               if ($stream.packetCount -lt 0) { throw "Observed packet count must be non-negative: $streamName" }
               if ($null -eq $stream.timing) { throw "Observed timing summary missing: $streamName" }
+              if ($null -eq $stream.activity) { throw "Observed activity summary missing: $streamName" }
+              if ($stream.activity.activeRunCount -lt 0 -or $stream.activity.longestActiveRunPackets -lt 0 -or $stream.activity.longestActiveRunMs -lt 0 -or $stream.activity.currentRunPackets -lt 0 -or $stream.activity.currentRunDurationMs -lt 0 -or $stream.activity.idleGapThresholdMs -lt 0) { throw "Observed activity values must be non-negative: $streamName" }
               if ($stream.timing.intervalCount -lt 0 -or $stream.timing.minIntervalMs -lt 0 -or $stream.timing.medianIntervalMs -lt 0 -or $stream.timing.p95IntervalMs -lt 0 -or $stream.timing.maxIntervalMs -lt 0 -or $stream.timing.jitterP95MinusMedianMs -lt 0 -or $stream.timing.idleGapCount50ms -lt 0 -or $stream.timing.longestIdleGapMs -lt 0) {
                 throw "Observed timing values must be non-negative: $streamName"
               }

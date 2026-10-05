@@ -64,3 +64,11 @@ add_executable(MouseEngine.ObservationDistributionTest
 target_link_libraries(MouseEngine.ObservationDistributionTest PRIVATE MouseEngine.Core)
 target_compile_features(MouseEngine.ObservationDistributionTest PRIVATE cxx_std_20)
 add_test(NAME MouseEngine.ObservationDistributionTest COMMAND MouseEngine.ObservationDistributionTest)
+
+
+add_executable(MouseEngine.SessionComparisonTest
+    SessionComparisonTest.cpp
+)
+target_link_libraries(MouseEngine.SessionComparisonTest PRIVATE MouseEngine.Core)
+target_compile_features(MouseEngine.SessionComparisonTest PRIVATE cxx_std_20)
+add_test(NAME MouseEngine.SessionComparisonTest COMMAND MouseEngine.SessionComparisonTest)

@@ -38,6 +38,23 @@ int main() {
 
     assert(!capture.stop("2026-10-05T15:00:02Z", nullptr, &error));
 
+    const fs::path blocked = fs::temp_directory_path() / "Mouse Engine Session Capture Blocked";
+    fs::remove_all(blocked, ec);
+    {
+        std::ofstream blocker(blocked, std::ios::binary | std::ios::trunc);
+        blocker << "not a directory";
+    }
+    mouse_engine::session::SessionCapture failing(
+        mouse_engine::session::SessionStore(
+            mouse_engine::workspace::WorkspacePaths::from_root(blocked)));
+    assert(failing.start("device-instance-43", "2026-10-05T15:01:00Z"));
+    assert(failing.record({100.0, mouse_engine::observation::Movement}));
+    error.clear();
+    assert(!failing.stop("2026-10-05T15:01:01Z", nullptr, &error));
+    assert(failing.is_recording());
+    assert(failing.packet_count() == 1);
+
+    fs::remove_all(blocked, ec);
     fs::remove_all(root, ec);
     return 0;
 }

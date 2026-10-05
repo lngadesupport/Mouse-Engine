@@ -103,6 +103,9 @@ jobs:
             if ($session.medianIntervalMs -lt 0 -or $session.p95IntervalMs -lt 0 -or $session.jitterP95MinusMedianMs -lt 0) { throw 'Persisted session timing must be non-negative.' }
             if ($session.idleGapCount50ms -lt 0 -or $session.activeRunCount -lt 0 -or $session.longestActiveRunPackets -lt 0) { throw 'Persisted session activity must be non-negative.' }
             if ($session.complete -isnot [bool]) { throw 'Persisted session completeness must be boolean.' }
+            if ($session.traceAvailable -isnot [bool]) { throw 'Persisted trace availability must be boolean.' }
+            if ($session.tracePacketCount -lt 0) { throw 'Persisted trace packet count must be non-negative.' }
+            if ($session.traceAvailable -and $session.tracePacketCount -lt 1) { throw 'Available trace must expose at least one packet.' }
             if ($session.distribution.sampleCount -lt 0) { throw 'Persisted distribution sample count must be non-negative.' }
             if ($session.distribution.meanIntervalMs -lt 0 -or $session.distribution.bucketWidthMs -lt 0) { throw 'Persisted distribution metrics must be non-negative.' }
             if ($session.distribution.buckets -isnot [array]) { throw 'Persisted distribution buckets must be an array.' }
@@ -138,6 +141,8 @@ jobs:
             if ($identity.observedInput.session.active -isnot [bool]) { throw 'Session active state must be boolean.' }
             if ($identity.observedInput.session.packetCount -lt 0) { throw 'Session packet count must be non-negative.' }
             if ($identity.observedInput.session.durationMs -lt 0) { throw 'Session duration must be non-negative.' }
+            if ($identity.observedInput.session.traceAvailable -isnot [bool]) { throw 'Active trace availability must be boolean.' }
+            if ($identity.observedInput.session.tracePacketCount -lt 0) { throw 'Active trace packet count must be non-negative.' }
 
             foreach ($streamName in @('all','movement','button','wheel')) {
               $stream = $identity.observedInput.streams.$streamName

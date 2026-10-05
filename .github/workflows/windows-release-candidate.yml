@@ -103,6 +103,20 @@ jobs:
             if ($session.medianIntervalMs -lt 0 -or $session.p95IntervalMs -lt 0 -or $session.jitterP95MinusMedianMs -lt 0) { throw 'Persisted session timing must be non-negative.' }
             if ($session.idleGapCount50ms -lt 0 -or $session.activeRunCount -lt 0 -or $session.longestActiveRunPackets -lt 0) { throw 'Persisted session activity must be non-negative.' }
             if ($session.complete -isnot [bool]) { throw 'Persisted session completeness must be boolean.' }
+            if ($session.distribution.sampleCount -lt 0) { throw 'Persisted distribution sample count must be non-negative.' }
+            if ($session.distribution.meanIntervalMs -lt 0 -or $session.distribution.bucketWidthMs -lt 0) { throw 'Persisted distribution metrics must be non-negative.' }
+            if ($session.distribution.buckets -isnot [array]) { throw 'Persisted distribution buckets must be an array.' }
+            foreach ($bucket in $session.distribution.buckets) {
+              if ($bucket.lowerBoundMs -lt 0 -or $bucket.upperBoundMs -lt $bucket.lowerBoundMs -or $bucket.count -lt 0) { throw 'Persisted distribution bucket bounds/count are invalid.' }
+              if ($bucket.cumulativeFraction -lt 0 -or $bucket.cumulativeFraction -gt 1) { throw 'Persisted distribution CDF fraction is invalid.' }
+            }
+            if ($session.anomalies -isnot [array]) { throw 'Persisted anomaly ledger must be an array.' }
+            foreach ($anomaly in $session.anomalies) {
+              foreach ($field in @('id','severity','type','message','stream')) {
+                if ($null -eq $anomaly.$field) { throw "Persisted anomaly field missing: $field" }
+              }
+            }
+
           }
 
           if ($snapshot.identity.transport -ne 'per-device') { throw 'Transport must remain per-device.' }

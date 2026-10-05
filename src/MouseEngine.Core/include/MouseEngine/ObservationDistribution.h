@@ -1,11 +1,39 @@
 #pragma once
 
 
+#include "ObservationSession.h"
+
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
 namespace mouse_engine::observation {
+
+namespace detail {
+template <typename TimedPacketT>
+inline std::vector<double> distribution_intervals(const std::vector<TimedPacketT>& packets) {
+    std::vector<double> intervals;
+    if (packets.size() < 2) return intervals;
+    intervals.reserve(packets.size() - 1);
+    for (std::size_t i = 1; i < packets.size(); ++i) {
+        const double delta = packets[i].timestamp_ms - packets[i - 1].timestamp_ms;
+        if (delta >= 0.0) intervals.push_back(delta);
+    }
+    std::sort(intervals.begin(), intervals.end());
+    return intervals;
+}
+
+inline double distribution_percentile(const std::vector<double>& sorted, double p) {
+    if (sorted.empty()) return 0.0;
+    const double position = (std::max)(0.0, (std::min)(1.0, p)) * static_cast<double>(sorted.size() - 1);
+    const auto lower = static_cast<std::size_t>(std::floor(position));
+    const auto upper = static_cast<std::size_t>(std::ceil(position));
+    if (lower == upper) return sorted[lower];
+    const double weight = position - static_cast<double>(lower);
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * weight;
+}
+} // namespace detail
 
 struct DistributionBucket {
     double lower_bound_ms{0.0};
@@ -31,7 +59,7 @@ inline IntervalDistribution build_interval_distribution(
     std::size_t requested_bucket_count = 24) {
 
     IntervalDistribution distribution;
-    const auto intervals = sorted_intervals(packets);
+    const auto intervals = detail::distribution_intervals(packets);
     if (intervals.empty()) return distribution;
 
     distribution.sample_count = intervals.size();
@@ -41,8 +69,8 @@ inline IntervalDistribution build_interval_distribution(
     double sum = 0.0;
     for (const double value : intervals) sum += value;
     distribution.mean_interval_ms = sum / static_cast<double>(intervals.size());
-    distribution.median_interval_ms = percentile(intervals, 0.50);
-    distribution.p95_interval_ms = percentile(intervals, 0.95);
+    distribution.median_interval_ms = detail::distribution_percentile(intervals, 0.50);
+    distribution.p95_interval_ms = detail::distribution_percentile(intervals, 0.95);
 
     if (distribution.min_interval_ms == distribution.max_interval_ms) {
         distribution.bucket_width_ms = 0.0;

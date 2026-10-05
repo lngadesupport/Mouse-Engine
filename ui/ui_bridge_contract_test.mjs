@@ -99,6 +99,10 @@ assert(ui.includes('snapshot.sessions.items'), 'session history snapshot contrac
 
 assert(ui.includes('Persisted CDF comparison'), 'persisted CDF comparison surface');
 assert(ui.includes('Anomaly Ledger'), 'anomaly ledger surface');
+assert(ui.includes('Investigation Timeline'), 'investigation timeline surface');
+assert(ui.includes('session-investigation-timeline'), 'investigation timeline container');
+assert(ui.includes('packetIndex'), 'anomaly packet index contract');
+assert(ui.includes('timestampMs'), 'anomaly timestamp contract');
 assert(ui.includes('Session Replay'), 'session replay surface');
 assert(ui.includes('session-replay-load'), 'session replay load control');
 assert(ui.includes('session-replay-scrubber'), 'session replay scrubber');

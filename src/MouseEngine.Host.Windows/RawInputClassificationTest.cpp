@@ -20,6 +20,10 @@ int check(mouse_engine::windows::RawInputPacketClass actual,
 
 int main() {
     using mouse_engine::windows::RawInputPacketClass;
+    using mouse_engine::windows::classify_raw_mouse_packet;
+    using mouse_engine::windows::raw_mouse_has_button_event;
+    using mouse_engine::windows::raw_mouse_has_wheel_event;
+    using mouse_engine::windows::raw_mouse_has_movement;
 
     if (check(classify_raw_mouse_packet(0, 0, 0, 0, 0),
               RawInputPacketClass::Other,

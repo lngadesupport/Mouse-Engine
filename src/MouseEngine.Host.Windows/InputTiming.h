@@ -13,6 +13,8 @@ struct InputTimingSummary {
     double p95_interval_ms{0.0};
     double max_interval_ms{0.0};
     double jitter_p95_minus_median_ms{0.0};
+    std::size_t idle_gap_count_50ms{0};
+    double longest_idle_gap_ms{0.0};
 };
 
 class InputTimingAccumulator {

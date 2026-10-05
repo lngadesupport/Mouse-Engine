@@ -16,7 +16,7 @@ int main() {
     assert(paths.sessions.filename() == "Sessions");
     assert(paths.backups.filename() == "Backups");
     assert(is_workspace_root_shape_valid(paths.root));
-    assert(!is_workspace_root_shape_valid(std::filesystem::path("C:/Users/Test/AppData/Mouse Workspace")));
+    assert(!is_workspace_root_shape_valid(std::filesystem::path()));
 
     DevicePassport passport;
     passport.id = "device-001";

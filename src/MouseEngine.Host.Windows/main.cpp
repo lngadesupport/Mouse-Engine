@@ -1,5 +1,6 @@
 #include <windows.h>
 #include "InputTiming.h"
+#include "RawInputClassification.h"
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
@@ -325,9 +326,16 @@ UsbEndpointEvidence inspect_usb_endpoint_evidence(const BusTopologyEvidence& top
     return evidence;
 }
 
+struct ObservedInputStreams {
+    mouse_engine::windows::InputTimingSummary all{};
+    mouse_engine::windows::InputTimingSummary movement{};
+    mouse_engine::windows::InputTimingSummary button{};
+    mouse_engine::windows::InputTimingSummary wheel{};
+};
+
 struct ObservedInputEvidence {
     bool available{false};
-    mouse_engine::windows::InputTimingSummary summary{};
+    ObservedInputStreams streams{};
 };
 
 struct WindowsMouseIdentity {
@@ -484,16 +492,23 @@ WindowsMouseIdentity resolve_setupapi_identity(const std::wstring& raw_device_pa
 class RawInputTimingRegistry {
 public:
     bool record(HRAWINPUT raw_input) {
-        UINT header_size = sizeof(RAWINPUTHEADER);
-        RAWINPUTHEADER header{};
-        if (GetRawInputData(
-                raw_input, RID_HEADER, &header, &header_size,
-                sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1) ||
-            header.dwType != RIM_TYPEMOUSE || header.hDevice == nullptr) {
+        UINT size = 0;
+        if (GetRawInputData(raw_input, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1) ||
+            size < sizeof(RAWINPUTHEADER)) {
             return false;
         }
 
-        const std::wstring path = raw_input_device_name(header.hDevice);
+        std::vector<BYTE> buffer(size);
+        if (GetRawInputData(
+                raw_input, RID_INPUT, buffer.data(), &size,
+                sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1)) {
+            return false;
+        }
+
+        const auto* raw = reinterpret_cast<const RAWINPUT*>(buffer.data());
+        if (raw->header.dwType != RIM_TYPEMOUSE || raw->header.hDevice == nullptr) return false;
+
+        const std::wstring path = raw_input_device_name(raw->header.hDevice);
         if (path.empty()) return false;
 
         LARGE_INTEGER now{};
@@ -506,10 +521,31 @@ public:
 
         auto [it, inserted] = per_device_.try_emplace(path);
         (void)inserted;
-        device_paths_[header.hDevice] = path;
-        it->second.record(
-            static_cast<std::uint64_t>(now.QuadPart),
-            frequency_ticks_);
+        device_paths_[raw->header.hDevice] = path;
+
+        auto& timing = it->second;
+        const auto& mouse = raw->data.mouse;
+        const std::int32_t wheel_delta =
+            raw_mouse_has_wheel_event(mouse.usButtonFlags)
+                ? static_cast<std::int16_t>(mouse.usButtonData)
+                : 0;
+        const std::int32_t horizontal_wheel_delta =
+            (mouse.usButtonFlags & 0x0800u) != 0
+                ? static_cast<std::int16_t>(mouse.usButtonData)
+                : 0;
+
+        const auto timestamp = static_cast<std::uint64_t>(now.QuadPart);
+        timing.all.record(timestamp, frequency_ticks_);
+        if (raw_mouse_has_movement(mouse.lLastX, mouse.lLastY)) {
+            timing.movement.record(timestamp, frequency_ticks_);
+        }
+        if (raw_mouse_has_button_event(mouse.usButtonFlags)) {
+            timing.button.record(timestamp, frequency_ticks_);
+        }
+        if (raw_mouse_has_wheel_event(mouse.usButtonFlags)) {
+            timing.wheel.record(timestamp, frequency_ticks_);
+        }
+
         return true;
     }
 
@@ -523,16 +559,23 @@ public:
 
     bool snapshot_for(
         const std::wstring& raw_path,
-        mouse_engine::windows::InputTimingSummary& summary) const {
+        ObservedInputEvidence& out) const {
         const auto it = per_device_.find(raw_path);
         if (it == per_device_.end()) return false;
-        return it->second.snapshot(summary);
+
+        out = {};
+        out.available =
+            it->second.all.snapshot(out.streams.all);
+        it->second.movement.snapshot(out.streams.movement);
+        it->second.button.snapshot(out.streams.button);
+        it->second.wheel.snapshot(out.streams.wheel);
+        return out.available;
     }
 
     bool any_available() const {
-        mouse_engine::windows::InputTimingSummary summary{};
+        ObservedInputEvidence evidence{};
         for (const auto& item : per_device_) {
-            if (item.second.snapshot(summary)) return true;
+            if (snapshot_for(item.first, evidence)) return true;
         }
         return false;
     }
@@ -544,8 +587,15 @@ public:
     }
 
 private:
+    struct DeviceTiming {
+        mouse_engine::windows::InputTimingAccumulator all;
+        mouse_engine::windows::InputTimingAccumulator movement;
+        mouse_engine::windows::InputTimingAccumulator button;
+        mouse_engine::windows::InputTimingAccumulator wheel;
+    };
+
     std::uint64_t frequency_ticks_{0};
-    std::unordered_map<std::wstring, mouse_engine::windows::InputTimingAccumulator> per_device_;
+    std::unordered_map<std::wstring, DeviceTiming> per_device_;
     std::unordered_map<HANDLE, std::wstring> device_paths_;
 };
 
@@ -620,11 +670,24 @@ std::string wide_json_escape(const std::wstring& value) {
     return json_escape(wide_to_utf8(value));
 }
 
+std::string timing_summary_json(
+    const mouse_engine::windows::InputTimingSummary& summary) {
+    std::ostringstream out;
+    out << "{\"intervalCount\":" << summary.interval_count
+        << ",\"minIntervalMs\":" << summary.min_interval_ms
+        << ",\"medianIntervalMs\":" << summary.median_interval_ms
+        << ",\"p95IntervalMs\":" << summary.p95_interval_ms
+        << ",\"maxIntervalMs\":" << summary.max_interval_ms
+        << ",\"jitterP95MinusMedianMs\":" << summary.jitter_p95_minus_median_ms
+        << "}";
+    return out.str();
+}
+
 std::string snapshot_json() {
     RawMouseObservation mouse = observe_raw_mice();
     for (auto& identity : mouse.identities) {
         identity.observed_input.available =
-            raw_input_timing().snapshot_for(identity.interface_path, identity.observed_input.summary);
+            raw_input_timing().snapshot_for(identity.interface_path, identity.observed_input);
     }
     std::ostringstream out;
     out << "{\n"
@@ -662,13 +725,13 @@ std::string snapshot_json() {
             << "}"
             << ",\"observedInput\":{\"available\":"
             << bool_json(identity.observed_input.available)
-            << ",\"intervalCount\":" << identity.observed_input.summary.interval_count
-            << ",\"minIntervalMs\":" << identity.observed_input.summary.min_interval_ms
-            << ",\"medianIntervalMs\":" << identity.observed_input.summary.median_interval_ms
-            << ",\"p95IntervalMs\":" << identity.observed_input.summary.p95_interval_ms
-            << ",\"maxIntervalMs\":" << identity.observed_input.summary.max_interval_ms
-            << ",\"jitterP95MinusMedianMs\":" << identity.observed_input.summary.jitter_p95_minus_median_ms
-            << ",\"scope\":\"WM_INPUT arrival inter-arrival\"}}";
+            << ",\"scope\":\"WM_INPUT arrival inter-arrival\","
+            << "\"streams\":{"
+            << "\"all\":" << timing_summary_json(identity.observed_input.streams.all)
+            << ",\"movement\":" << timing_summary_json(identity.observed_input.streams.movement)
+            << ",\"button\":" << timing_summary_json(identity.observed_input.streams.button)
+            << ",\"wheel\":" << timing_summary_json(identity.observed_input.streams.wheel)
+            << "}}}";
     }
     out << "],\n"
         << "  \"identity\": { \"available\": " << bool_json(!mouse.identities.empty())

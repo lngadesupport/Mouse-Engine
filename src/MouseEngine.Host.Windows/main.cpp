@@ -642,11 +642,29 @@ public:
             const double timestamp_ms =
                 static_cast<double>(timestamp - timing.session_start_ticks) * 1000.0 /
                 static_cast<double>(frequency_ticks_);
-            if (!timing.session->record({timestamp_ms, classes})) {
+            const auto wheel_delta =
+                raw_mouse_has_wheel_event(mouse.usButtonFlags)
+                    ? static_cast<std::int16_t>(mouse.usButtonData)
+                    : 0;
+            const mouse_engine::session::TracePacket trace_packet{
+                timestamp_ms,
+                classes,
+                static_cast<std::int32_t>(mouse.lLastX),
+                static_cast<std::int32_t>(mouse.lLastY),
+                static_cast<std::uint32_t>(mouse.usButtonFlags),
+                static_cast<std::int32_t>(wheel_delta)
+            };
+            if (!timing.session->record({timestamp_ms, classes}, trace_packet)) {
                 finalize_session(timing);
                 ensure_session(path, timing, timestamp);
                 if (timing.session && timing.session->is_recording() && timing.session_start_ticks != 0) {
-                    timing.session->record({0.0, classes});
+                    timing.session->record(
+                        {0.0, classes},
+                        {0.0, classes,
+                         static_cast<std::int32_t>(mouse.lLastX),
+                         static_cast<std::int32_t>(mouse.lLastY),
+                         static_cast<std::uint32_t>(mouse.usButtonFlags),
+                         static_cast<std::int32_t>(wheel_delta)});
                 }
             }
         }
@@ -768,7 +786,7 @@ private:
 
         const auto paths = mouse_engine::workspace::WorkspacePaths::from_root(workspace_root());
         timing.session = std::make_unique<mouse_engine::session::SessionCapture>(
-            mouse_engine::session::SessionStore(paths));
+            mouse_engine::session::SessionStore(paths), true);
 
         if (!timing.session->start(session_device_id(raw_path), utc_now_iso8601())) {
             timing.session.reset();

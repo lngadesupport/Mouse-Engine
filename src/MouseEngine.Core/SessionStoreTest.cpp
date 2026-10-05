@@ -55,7 +55,7 @@ int main() {
 
     std::ifstream input(path, std::ios::binary);
     const std::string json((std::istreambuf_iterator<char>(input)), {});
-    assert(json.find(""schemaVersion":3") != std::string::npos);
+    assert(json.find("\"schemaVersion\":3") != std::string::npos);
     assert(json.find("\"id\":\"session/unsafe\"") != std::string::npos);
 
     auto summaries = store.list(&error);

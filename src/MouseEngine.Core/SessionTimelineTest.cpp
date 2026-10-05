@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <cmath>
-#include <vector>
 #include <limits>
 #include <string>
 
@@ -50,11 +49,30 @@ int main() {
     assert(timeline.events[7].kind == TimelineEventKind::SessionEnd);
     assert(timeline.events[6].packet_index == 3);
 
+    ObservationAnomaly invalid_index = anomaly;
+    invalid_index.packet_index = trace.packets.size();
+    const auto with_invalid_anomaly = build_timeline(trace, {invalid_index}, 50.0);
+    assert(with_invalid_anomaly.available);
+    assert(with_invalid_anomaly.events.size() == 6);
+
     SessionTrace invalid = trace;
     invalid.packets[2].timestamp_ms = -1.0;
     const auto invalid_timeline = build_timeline(invalid, {}, 50.0);
     assert(!invalid_timeline.available);
     assert(invalid_timeline.events.empty());
+
+    SessionTrace invalid_schema = trace;
+    invalid_schema.schema_version = SessionTrace::kSchemaVersion + 1;
+    const auto invalid_schema_timeline = build_timeline(invalid_schema, {}, 50.0);
+    assert(!invalid_schema_timeline.available);
+    assert(invalid_schema_timeline.events.empty());
+
+    SessionTrace empty;
+    empty.session_id = "session-empty";
+    empty.device_id = "device-empty";
+    const auto empty_timeline = build_timeline(empty, {}, 50.0);
+    assert(!empty_timeline.available);
+    assert(empty_timeline.events.empty());
 
     const auto invalid_threshold = build_timeline(trace, {}, -1.0);
     assert(!invalid_threshold.available);

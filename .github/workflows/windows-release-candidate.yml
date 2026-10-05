@@ -3,10 +3,6 @@ name: Windows Release Candidate
 on:
   push:
     branches: [feature/phase38-installer-real]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
-  push:
     tags:
       - 'v1.0.0-rc.*'
 
@@ -76,15 +72,20 @@ jobs:
       - name: Host self-test
         shell: pwsh
         run: |
-          .uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe --self-test
-          .uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe --print-environment
-          .uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe --print-storage
-          .uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe --print-snapshot
+          ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --self-test
+          ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-environment
+          ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-storage
+          $snapshot = ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-snapshot | ConvertFrom-Json
+          if ($snapshot.schemaVersion -ne 1) { throw 'Snapshot schema version mismatch.' }
+          if ($snapshot.host.online -ne $true) { throw 'Host snapshot is not online.' }
+          if ($snapshot.device.connected -ne $false) { throw 'Unexpected fabricated device connection state.' }
+          if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
+          Write-Output 'host_snapshot_contract: PASS'
 
       - name: Validate Windows host binary
         shell: pwsh
         run: |
-          $exe = Resolve-Path '.uild-releasesrcMouseEngine.Host.WindowsReleaseMouseEngine.Host.Windows.exe'
+          $exe = Resolve-Path './build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe'
           $dump = & dumpbin.exe /headers $exe 2>&1
           if ($LASTEXITCODE -ne 0) { throw 'dumpbin failed for host executable.' }
           if (-not ($dump | Select-String '8664 machine \(x64\)')) { throw 'Host executable is not a validated x64 PE binary.' }
@@ -93,21 +94,21 @@ jobs:
       - name: Package Windows distribution
         shell: pwsh
         run: |
-          python tools/package_windows.py --source . --host-executable .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --output .\MouseEngine-1.0.0-rc.3-win64.zip
+          python tools/package_windows.py --source . --host-executable ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --output ./MouseEngine-1.0.0-rc.3-win64.zip
 
       - name: Verify package archive
         shell: pwsh
         run: |
           python tools/package_windows_tests.py
           python tools/release_gate.py
-          Expand-Archive -LiteralPath .\MouseEngine-1.0.0-rc.3-win64.zip -DestinationPath .\package-smoke -Force
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\windows_installer_smoke.ps1 -DistributionRoot '.\package-smoke\Mouse Engine'
-          Get-FileHash .\MouseEngine-1.0.0-rc.3-win64.zip -Algorithm SHA256 | Format-List
+          Expand-Archive -LiteralPath ./MouseEngine-1.0.0-rc.3-win64.zip -DestinationPath ./package-smoke -Force
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/windows_installer_smoke.ps1 -DistributionRoot './package-smoke/Mouse Engine'
+          Get-FileHash ./MouseEngine-1.0.0-rc.3-win64.zip -Algorithm SHA256 | Format-List
 
       - name: Build Windows installer
         shell: pwsh
         run: |
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\build_windows_installer.ps1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build_windows_installer.ps1
 
       - name: Upload Windows distribution
         uses: actions/upload-artifact@v4

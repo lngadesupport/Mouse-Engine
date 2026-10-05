@@ -6,7 +6,6 @@
 #include <filesystem>
 #include <fstream>
 #include <regex>
-#include <sstream>
 #include <string>
 #include <utility>
 
@@ -41,18 +40,22 @@ public:
         {
             std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
             if (!output) return fail(error, "cannot create temporary trace file");
-            output << "{"schemaVersion":" << trace.schema_version
-                   << ","sessionId":"" << json_escape(trace.session_id)
-                   << "","deviceId":"" << json_escape(trace.device_id)
-                   << "","truncated":" << (trace.truncated ? "true" : "false") << "}\n";
+
+            output << "{\"schemaVersion\":" << trace.schema_version
+                   << ",\"sessionId\":\"" << json_escape(trace.session_id)
+                   << "\",\"deviceId\":\"" << json_escape(trace.device_id)
+                   << "\",\"packetCount\":" << trace.packets.size()
+                   << ",\"truncated\":" << (trace.truncated ? "true" : "false") << "}\n";
+
             for (const auto& packet : trace.packets) {
-                output << "{"timestampMs":" << packet.timestamp_ms
-                       << ","classes":" << packet.classes
-                       << ","dx":" << packet.dx
-                       << ","dy":" << packet.dy
-                       << ","buttons":" << packet.buttons
-                       << ","wheel":" << packet.wheel << "}\n";
+                output << "{\"timestampMs\":" << packet.timestamp_ms
+                       << ",\"classes\":" << packet.classes
+                       << ",\"dx\":" << packet.dx
+                       << ",\"dy\":" << packet.dy
+                       << ",\"buttons\":" << packet.buttons
+                       << ",\"wheel\":" << packet.wheel << "}\n";
             }
+
             if (!output) return fail(error, "cannot write temporary trace file");
         }
 
@@ -66,7 +69,11 @@ public:
         return true;
     }
 
-    bool load(const std::string& session_id, SessionTrace* trace, std::string* error = nullptr) const {
+    bool load(
+        const std::string& session_id,
+        SessionTrace* trace,
+        std::string* error = nullptr) const {
+
         if (!trace) return fail(error, "trace output is null");
         *trace = {};
 
@@ -77,17 +84,21 @@ public:
         if (!std::getline(input, line)) return fail(error, "trace header missing");
 
         std::size_t schema = 0;
+        std::size_t header_packet_count = 0;
         if (!size_field(line, "schemaVersion", &schema) ||
             schema != static_cast<std::size_t>(SessionTrace::kSchemaVersion) ||
             !string_field(line, "sessionId", &trace->session_id) ||
-            !string_field(line, "deviceId", &trace->device_id)) {
+            !string_field(line, "deviceId", &trace->device_id) ||
+            !size_field(line, "packetCount", &header_packet_count)) {
             return fail(error, "invalid trace header");
         }
+
         trace->schema_version = static_cast<int>(schema);
-        trace->truncated = line.find(""truncated":true") != std::string::npos;
+        trace->truncated = line.find("\"truncated\":true") != std::string::npos;
 
         while (std::getline(input, line)) {
             if (line.empty()) continue;
+
             TracePacket packet;
             if (!double_field(line, "timestampMs", &packet.timestamp_ms) ||
                 !uint_field(line, "classes", &packet.classes) ||
@@ -102,65 +113,125 @@ public:
 
         if (input.bad()) return fail(error, "cannot read trace file");
         if (trace->session_id != session_id) return fail(error, "trace session id mismatch");
+        if (trace->packets.size() != header_packet_count) {
+            return fail(error, "trace packet count mismatch");
+        }
         return true;
     }
 
 private:
-    static bool string_field(const std::string& json, const char* key, std::string* value) {
-        const std::regex pattern(std::string(""") + key + "":"([^"]*)"");
+    static bool string_field(
+        const std::string& json,
+        const char* key,
+        std::string* value) {
+
+        const std::regex pattern(
+            std::string("\"") + key + "\":\"([^\"]*)\"");
         std::smatch match;
         if (!std::regex_search(json, match, pattern)) return false;
         *value = match[1].str();
         return true;
     }
 
-    static bool size_field(const std::string& json, const char* key, std::size_t* value) {
-        const std::regex pattern(std::string(""") + key + "":([0-9]+)");
+    static bool size_field(
+        const std::string& json,
+        const char* key,
+        std::size_t* value) {
+
+        const std::regex pattern(
+            std::string("\"") + key + "\":([0-9]+)");
         std::smatch match;
         if (!std::regex_search(json, match, pattern)) return false;
-        try { *value = static_cast<std::size_t>(std::stoull(match[1].str())); return true; }
-        catch (...) { return false; }
+
+        try {
+            *value = static_cast<std::size_t>(std::stoull(match[1].str()));
+            return true;
+        } catch (...) {
+            return false;
+        }
     }
 
-    static bool uint_field(const std::string& json, const char* key, unsigned int* value) {
+    static bool uint_field(
+        const std::string& json,
+        const char* key,
+        unsigned int* value) {
+
         std::size_t parsed = 0;
         if (!size_field(json, key, &parsed)) return false;
+        if (parsed > static_cast<std::size_t>((std::numeric_limits<unsigned int>::max)())) {
+            return false;
+        }
         *value = static_cast<unsigned int>(parsed);
         return true;
     }
 
-    static bool int_field(const std::string& json, const char* key, std::int32_t* value) {
-        const std::regex pattern(std::string(""") + key + "":([-+]?[0-9]+)");
+    static bool int_field(
+        const std::string& json,
+        const char* key,
+        std::int32_t* value) {
+
+        const std::regex pattern(
+            std::string("\"") + key + "\":([-+]?[0-9]+)");
         std::smatch match;
         if (!std::regex_search(json, match, pattern)) return false;
-        try { *value = static_cast<std::int32_t>(std::stoll(match[1].str())); return true; }
-        catch (...) { return false; }
+
+        try {
+            const auto parsed = std::stoll(match[1].str());
+            if (parsed < static_cast<long long>((std::numeric_limits<std::int32_t>::min)()) ||
+                parsed > static_cast<long long>((std::numeric_limits<std::int32_t>::max)())) {
+                return false;
+            }
+            *value = static_cast<std::int32_t>(parsed);
+            return true;
+        } catch (...) {
+            return false;
+        }
     }
 
-    static bool double_field(const std::string& json, const char* key, double* value) {
-        const std::regex pattern(std::string(""") + key + "":([-+]?[0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)");
+    static bool double_field(
+        const std::string& json,
+        const char* key,
+        double* value) {
+
+        const std::regex pattern(
+            std::string("\"") + key +
+            "\":([-+]?[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)");
         std::smatch match;
         if (!std::regex_search(json, match, pattern)) return false;
-        try { *value = std::stod(match[1].str()); return true; }
-        catch (...) { return false; }
+
+        try {
+            *value = std::stod(match[1].str());
+            return true;
+        } catch (...) {
+            return false;
+        }
     }
 
     static std::string json_escape(const std::string& value) {
         std::string out;
+        out.reserve(value.size() + 8);
         for (const char ch : value) {
-            if (ch == '\\') out += "\\\\";
-            else if (ch == '"') out += "\\"";
-            else out += ch;
+            switch (ch) {
+            case '\\': out += "\\\\"; break;
+            case '"': out += "\\\""; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default: out += ch; break;
+            }
         }
         return out;
     }
 
     static std::string sanitize_id(const std::string& id) {
         std::string out;
+        out.reserve(id.size());
         for (const char ch : id) {
             const bool safe =
-                (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
-                (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.';
+                (ch >= 'a' && ch <= 'z') ||
+                (ch >= 'A' && ch <= 'Z') ||
+                (ch >= '0' && ch <= '9') ||
+                ch == '-' || ch == '_' || ch == '.';
             out += safe ? ch : '_';
         }
         return out.empty() ? "session" : out;

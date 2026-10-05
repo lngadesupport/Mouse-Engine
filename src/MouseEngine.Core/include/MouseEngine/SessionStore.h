@@ -27,6 +27,10 @@ struct SessionSummary {
     std::size_t idle_gap_count_50ms{0};
     std::size_t active_run_count{0};
     std::size_t longest_active_run_packets{0};
+    std::size_t distribution_sample_count{0};
+    double distribution_mean_interval_ms{0.0};
+    double distribution_bucket_width_ms{0.0};
+    std::vector<model::DistributionBucket> distribution_buckets;
     bool complete{false};
 };
 
@@ -152,9 +156,33 @@ private:
             !double_field(all, "p95IntervalMs", &summary->p95_interval_ms) ||
             !double_field(all, "jitterP95MinusMedianMs", &summary->jitter_p95_minus_median_ms) ||
             !size_field(all, "idleGapCount50ms", &summary->idle_gap_count_50ms) ||
+            !size_field(all, "sampleCount", &summary->distribution_sample_count) ||
+            !double_field(all, "meanIntervalMs", &summary->distribution_mean_interval_ms) ||
+            !double_field(all, "bucketWidthMs", &summary->distribution_bucket_width_ms) ||
             !size_field(json, "activeRunCount", &summary->active_run_count) ||
             !size_field(json, "longestActiveRunPackets", &summary->longest_active_run_packets)) {
             return false;
+        }
+
+        const auto distribution_pos = all.find("\"distribution\":{");
+        if (distribution_pos == std::string::npos) return false;
+        const auto buckets_pos = all.find("\"buckets\":[", distribution_pos);
+        if (buckets_pos == std::string::npos) return false;
+        const auto buckets_end = all.find("]", buckets_pos);
+        if (buckets_end == std::string::npos) return false;
+        const std::string buckets = all.substr(buckets_pos, buckets_end - buckets_pos);
+        const std::regex bucket_pattern(
+            "\\{\\\"lowerBoundMs\\\":([-+]?[0-9]+(?:\\\\.[0-9]+)?),"
+            "\\\"upperBoundMs\\\":([-+]?[0-9]+(?:\\\\.[0-9]+)?),"
+            "\\\"count\\\":([0-9]+),"
+            "\\\"cumulativeFraction\\\":([-+]?[0-9]+(?:\\\\.[0-9]+)?)\\}");
+        for (std::sregex_iterator it(buckets.begin(), buckets.end(), bucket_pattern), end; it != end; ++it) {
+            model::DistributionBucket bucket;
+            bucket.lower_bound_ms = std::stod((*it)[1].str());
+            bucket.upper_bound_ms = std::stod((*it)[2].str());
+            bucket.count = static_cast<std::size_t>(std::stoull((*it)[3].str()));
+            bucket.cumulative_fraction = std::stod((*it)[4].str());
+            summary->distribution_buckets.push_back(bucket);
         }
 
         summary->complete = true;

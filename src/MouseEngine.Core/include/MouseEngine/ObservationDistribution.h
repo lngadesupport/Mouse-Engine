@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ObservationAnalysis.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -26,8 +25,9 @@ struct IntervalDistribution {
     std::vector<DistributionBucket> buckets;
 };
 
+template <typename TimedPacketT>
 inline IntervalDistribution build_interval_distribution(
-    const std::vector<TimedPacket>& packets,
+    const std::vector<TimedPacketT>& packets,
     std::size_t requested_bucket_count = 24) {
 
     IntervalDistribution distribution;

@@ -129,13 +129,6 @@ private:
         return true;
     }
 
-    static bool uint_field(const std::string& json, const char* key, std::uint32_t* value) {
-        std::size_t parsed = 0;
-        if (!size_field(json, key, &parsed)) return false;
-        *value = static_cast<std::uint32_t>(parsed);
-        return true;
-    }
-
     static bool int_field(const std::string& json, const char* key, std::int32_t* value) {
         const std::regex pattern(std::string(""") + key + "":([-+]?[0-9]+)");
         std::smatch match;

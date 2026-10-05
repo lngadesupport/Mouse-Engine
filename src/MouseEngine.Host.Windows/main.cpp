@@ -1,0 +1,256 @@
+#include <windows.h>
+#include <shlobj.h>
+#include <shellapi.h>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <string_view>
+
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
+#include <wrl.h>
+#include <WebView2.h>
+#endif
+
+namespace {
+using Microsoft::WRL::ComPtr;
+
+std::filesystem::path local_app_data() {
+    PWSTR raw = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_DEFAULT, nullptr, &raw))) {
+        std::filesystem::path result(raw);
+        CoTaskMemFree(raw);
+        return result;
+    }
+    return std::filesystem::temp_directory_path();
+}
+
+std::filesystem::path storage_root() {
+    return local_app_data() / L"Mouse Engine";
+}
+
+std::filesystem::path install_root() {
+    return local_app_data() / L"Programs" / L"Mouse Engine";
+}
+
+std::string json_escape(const std::string& value) {
+    std::string out;
+    for (char c : value) {
+        if (c == '\\') out += "\\\\";
+        else if (c == '"') out += "\\"";
+        else if (c == '\n') out += "\\n";
+        else if (c == '\r') out += "\\r";
+        else if (c == '\t') out += "\\t";
+        else out += c;
+    }
+    return out;
+}
+
+std::string bool_json(bool value) {
+    return value ? "true" : "false";
+}
+
+std::string environment_json() {
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
+    constexpr bool sdk = true;
+#else
+    constexpr bool sdk = false;
+#endif
+    const bool mutation_allowed = false;
+    const bool firmware_flashing = false;
+    std::ostringstream out;
+    out << "{\n"
+        << "  \"platform\": \"windows\",\n"
+        << "  \"architecture\": \"x64\",\n"
+        << "  \"webview2SdkEnabled\": " << bool_json(sdk) << ",\n"
+        << "  \"mutationDefaultAllowed\": " << bool_json(mutation_allowed) << ",\n"
+        << "  \"firmwareFlashingEnabled\": " << bool_json(firmware_flashing) << "\n"
+        << "}";
+    return out.str();
+}
+
+std::string snapshot_json() {
+    std::ostringstream out;
+    out << "{\n"
+        << "  \"schemaVersion\": 1,\n"
+        << "  \"device\": { \"connected\": false },\n"
+        << "  \"latency\": { \"available\": false },\n"
+        << "  \"mutation\": { \"allowed\": false }\n"
+        << "}";
+    return out.str();
+}
+
+int self_test() {
+    std::error_code ec;
+    std::filesystem::create_directories(storage_root(), ec);
+    if (ec) {
+        std::cerr << "self-test: cannot create storage root: " << ec.message() << "\n";
+        return 2;
+    }
+
+    const auto probe = storage_root() / ".self-test";
+    {
+        std::ofstream file(probe, std::ios::binary | std::ios::trunc);
+        if (!file) {
+            std::cerr << "self-test: cannot write storage probe\n";
+            return 3;
+        }
+        file << "Mouse Engine self-test\n";
+    }
+    std::filesystem::remove(probe, ec);
+    std::cout << "status=PASS\n";
+    return 0;
+}
+
+void print_storage() {
+    std::cout << "{\n"
+              << "  \"installRoot\": \"" << json_escape(install_root().string()) << "\",\n"
+              << "  \"userData\": \"" << json_escape(storage_root().string()) << "\"\n"
+              << "}\n";
+}
+
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
+class WebViewHost {
+public:
+    bool initialize(HWND hwnd, const std::filesystem::path& data_dir) {
+        hwnd_ = hwnd;
+        data_dir_ = data_dir;
+        std::error_code ec;
+        std::filesystem::create_directories(data_dir_, ec);
+        if (ec) return false;
+
+        HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
+            nullptr,
+            data_dir_.wstring().c_str(),
+            nullptr,
+            Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
+                this, &WebViewHost::environment_ready).Get());
+        return SUCCEEDED(hr);
+    }
+
+    bool ready() const noexcept { return controller_ != nullptr && webview_ != nullptr; }
+
+private:
+    HRESULT environment_ready(HRESULT result, ICoreWebView2Environment* environment) {
+        if (FAILED(result) || environment == nullptr) return result;
+        environment_ = environment;
+        return environment_->CreateCoreWebView2Controller(
+            hwnd_,
+            Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+                this, &WebViewHost::controller_ready).Get());
+    }
+
+    HRESULT controller_ready(HRESULT result, ICoreWebView2Controller* controller) {
+        if (FAILED(result) || controller == nullptr) return result;
+        controller_ = controller;
+        HRESULT hr = controller_->get_CoreWebView2(&webview_);
+        if (FAILED(hr) || !webview_) return hr;
+        RECT bounds{};
+        GetClientRect(hwnd_, &bounds);
+        controller_->put_Bounds(bounds);
+        return webview_->Navigate(L"data:text/html,<html><body style='font-family:Segoe UI;background:#0b0d10;color:#d9f5ff;padding:40px'><h1>Mouse Engine</h1><p>Host iniciado.</p><p>Sem dispositivo físico detectado neste momento.</p><p>Mutations: denied by default.</p></body></html>");
+    }
+
+    HWND hwnd_{};
+    std::filesystem::path data_dir_;
+    ComPtr<ICoreWebView2Environment> environment_;
+    ComPtr<ICoreWebView2Controller> controller_;
+    ComPtr<ICoreWebView2> webview_;
+};
+#endif
+
+LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
+    static WebViewHost* webview = nullptr;
+#endif
+    switch (message) {
+    case WM_CREATE:
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
+        webview = new WebViewHost();
+        if (!webview->initialize(hwnd, storage_root() / L"WebView2")) {
+            delete webview;
+            webview = nullptr;
+        }
+#else
+        (void)lparam;
+#endif
+        return 0;
+
+    case WM_SIZE:
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
+        if (webview && webview->ready()) {
+            // The controller bounds are managed by WebView2; a future UI bridge can refine this.
+        }
+#endif
+        return 0;
+
+    case WM_DESTROY:
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
+        delete webview;
+        webview = nullptr;
+#endif
+        PostQuitMessage(0);
+        return 0;
+    default:
+        return DefWindowProcW(hwnd, message, wparam, lparam);
+    }
+}
+
+int run_gui(HINSTANCE instance) {
+    const wchar_t* class_name = L"MouseEngineHostWindow";
+    WNDCLASSW wc{};
+    wc.hInstance = instance;
+    wc.lpfnWndProc = window_proc;
+    wc.lpszClassName = class_name;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+
+    if (!RegisterClassW(&wc)) return 10;
+
+    HWND hwnd = CreateWindowExW(
+        0, class_name, L"Mouse Engine",
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, 1100, 760,
+        nullptr, nullptr, instance, nullptr);
+    if (!hwnd) return 11;
+
+    ShowWindow(hwnd, SW_SHOW);
+    UpdateWindow(hwnd);
+
+    MSG message{};
+    while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+    }
+    return static_cast<int>(message.wParam);
+}
+}
+
+int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR command_line, int) {
+    HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const int result = [&]() -> int {
+        int argc = 0;
+        LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        std::wstring command;
+        if (argc > 1 && argv) command = argv[1];
+        if (argv) LocalFree(argv);
+
+        if (command == L"--self-test") return self_test();
+        if (command == L"--print-environment") {
+            std::cout << environment_json() << "\n";
+            return 0;
+        }
+        if (command == L"--print-storage") {
+            print_storage();
+            return 0;
+        }
+        if (command == L"--print-snapshot") {
+            std::cout << snapshot_json() << "\n";
+            return 0;
+        }
+        return run_gui(instance);
+    }();
+    if (SUCCEEDED(com)) CoUninitialize();
+    return result;
+}

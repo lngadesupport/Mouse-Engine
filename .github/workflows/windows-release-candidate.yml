@@ -24,6 +24,11 @@ jobs:
         with:
           arch: x64
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+
       - name: Download pinned WebView2 SDK
         shell: pwsh
         run: |
@@ -60,6 +65,7 @@ jobs:
           .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --self-test
           .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-environment
           .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-storage
+          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-snapshot
 
       - name: Validate Windows host binary
         shell: pwsh
@@ -84,10 +90,17 @@ jobs:
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\windows_installer_smoke.ps1 -DistributionRoot '.\package-smoke\Mouse Engine'
           Get-FileHash .\MouseEngine-1.0.0-rc.3-win64.zip -Algorithm SHA256 | Format-List
 
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\build_windows_installer.ps1
+
       - name: Upload Windows distribution
         uses: actions/upload-artifact@v4
         with:
           name: MouseEngine-1.0.0-rc.3-win64
-          path: MouseEngine-1.0.0-rc.3-win64.zip
+          path: |
+            MouseEngine-1.0.0-rc.3-win64.zip
+            dist/MouseEngine-1.0.0-rc.3-win64-setup.exe
           if-no-files-found: error
           retention-days: 30

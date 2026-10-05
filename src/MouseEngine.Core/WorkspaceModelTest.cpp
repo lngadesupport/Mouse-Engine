@@ -15,8 +15,8 @@ int main() {
     assert(paths.manifest.filename() == "workspace.json");
     assert(paths.sessions.filename() == "Sessions");
     assert(paths.backups.filename() == "Backups");
-    assert(is_workspace_path_safe(paths.root));
-    assert(!is_workspace_path_safe(std::filesystem::path("C:/Users/Test/AppData/Mouse Engine")));
+    assert(is_workspace_root_shape_valid(paths.root));
+    assert(!is_workspace_root_shape_valid(std::filesystem::path("C:/Users/Test/AppData/Mouse Workspace")));
 
     DevicePassport passport;
     passport.id = "device-001";

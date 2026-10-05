@@ -33,6 +33,7 @@ def main() -> int:
             names = set(zf.namelist())
             assert "Mouse Engine/MouseEngine.Host.Windows.exe" in names
             assert "Mouse Engine/packaging/RELEASE_MANIFEST.json" in names
+            assert "Mouse Engine/ui/index.html" in names
 
     print("package_windows_tests: PASS")
     return 0

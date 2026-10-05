@@ -8,7 +8,7 @@ const required = [
   'Mutation policy', 'DENIED BY DEFAULT', 'No device telemetry available',
   'Host snapshot: awaiting', 'schemaVersion===2', 'mouseCount', 'observationAvailable', 'identityResolvedCount', 'instanceId', 'containerId', 'manufacturer', 'product', 'transport', 'topologyHash', 'direct ancestry evidence', 'Mixed — per-device direct ancestry evidence',
   'configuredInterval', 'descriptorInterval', 'observedInput', 'medianIntervalMs', 'p95IntervalMs', 'jitterP95MinusMedianMs', 'WM_INPUT arrival inter-arrival', 'All input', 'Movement stream', 'Button events', 'Wheel events', 'streams', 'packetCount', 'timing pending', 'idleGapCount50ms', 'longestIdleGapMs',
-  'Configured', 'Device reported', 'Observed', 'Not measured', 'Investigation Timeline', 'session-investigation-timeline', 'packetIndex', 'timestampMs', '50 ms segmentation threshold'
+  'Configured', 'Device reported', 'Observed', 'Not measured', 'Investigation Timeline', 'session-investigation-timeline', 'packetIndex', 'timestampMs', '50 ms segmentation threshold', 'message.timeline', 'timelineAvailable', 'sessionStart', 'idleGap', 'sessionEnd'
 ];
 for (const label of required) assert.ok(html.includes(label), `missing UI contract: ${label}`);
 assert.match(html, /id="app"/);

@@ -97,6 +97,15 @@ The native accumulator retains a bounded interval window and exposes:
 
 The measurement scope is explicitly **WM_INPUT arrival inter-arrival**. It is therefore evidence about the host-observed input stream, not a direct electrical/USB bus polling measurement.
 
+The host also classifies packets into independently measured streams:
+
+- **All input** — every accepted mouse `WM_INPUT` packet;
+- **Movement** — packets carrying non-zero relative X/Y movement;
+- **Button events** — packets carrying mouse button flags;
+- **Wheel events** — packets carrying vertical or horizontal wheel flags.
+
+These streams intentionally overlap. A packet containing movement and a button transition contributes to both streams. This preserves event-specific evidence without pretending that a mixed Raw Input packet belongs to only one physical action.
+
 No conversion from the observed interval distribution into a claimed device polling rate is performed.
 
 Snapshot schema is now version 2 because observed timing is a new externally visible evidence field.
@@ -136,5 +145,3 @@ It does not:
 ## Verification status
 
 Static contract checks cover the SetupAPI symbols, USB hub/endpoint evidence path, snapshot schema, UI validation, timing-state separation, and mutation boundary. A Windows runner with the current branch must still perform the authoritative compile/link/runtime verification. Physical hardware verification remains separate from CI.
-
-A Windows runner with the current branch must still perform the authoritative compile/link/runtime verification. Physical hardware verification remains separate from CI.

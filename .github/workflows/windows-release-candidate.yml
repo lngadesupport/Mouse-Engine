@@ -91,6 +91,14 @@ jobs:
           foreach ($identity in $snapshot.device.identities) {
             if ($identity.resolved -and $identity.transport -notin @('Usb', 'Bluetooth', 'Unknown')) { throw 'Unexpected direct transport classification.' }
             if ($identity.resolved -and [string]::IsNullOrWhiteSpace($identity.topologyHash)) { throw 'Resolved identity must carry a topology evidence hash.' }
+            if ($null -eq $identity.usbEndpoint) { throw 'Resolved identity must carry USB endpoint evidence state.' }
+            if ($identity.usbEndpoint.connectionIndex -isnot [int] -or $identity.usbEndpoint.connectionIndex -lt 0) { throw 'USB connection index must be a non-negative integer.' }
+            if ($identity.usbEndpoint.speedCode -isnot [int] -or $identity.usbEndpoint.speedCode -lt 0) { throw 'USB speed code must be a non-negative integer.' }
+            if ($identity.usbEndpoint.deviceAddress -isnot [int] -or $identity.usbEndpoint.deviceAddress -lt 0) { throw 'USB device address must be a non-negative integer.' }
+            if ($identity.usbEndpoint.interruptInEndpointCount -isnot [int] -or $identity.usbEndpoint.interruptInEndpointCount -lt 0) { throw 'USB interrupt IN endpoint count must be a non-negative integer.' }
+            if ($identity.usbEndpoint.configuredInterval.available -ne $false) { throw 'Configured interval must remain unavailable until a distinct host configuration evidence source exists.' }
+            if ($identity.usbEndpoint.descriptorInterval.available -and ($identity.usbEndpoint.descriptorInterval.value -lt 0 -or $identity.usbEndpoint.descriptorInterval.value -gt 255)) { throw 'USB descriptor bInterval must be an unsigned byte.' }
+            if ($identity.usbEndpoint.observedInterval.available -ne $false) { throw 'Observed interval must remain unavailable until a measurement session exists.' }
           }
           if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
           Write-Output 'host_snapshot_contract: PASS'

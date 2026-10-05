@@ -37,6 +37,7 @@ int main() {
     session.all.timing.median_interval_ms = distribution.median_interval_ms;
     session.all.timing.p95_interval_ms = distribution.p95_interval_ms;
     session.all.timing.max_interval_ms = distribution.max_interval_ms;
+    session.all.distribution = mouse_engine::observation::to_model_distribution(distribution);
 
     const auto json = mouse_engine::session::serialize_json(session);
     assert(json.find(""intervalCount":7") != std::string::npos);

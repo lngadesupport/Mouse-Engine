@@ -1,5 +1,8 @@
 #include <windows.h>
 #include <algorithm>
+#include <setupapi.h>
+#include <devpkey.h>
+#include <hidclass.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <filesystem>
@@ -43,6 +46,15 @@ std::filesystem::path install_root() {
     return local_app_data() / L"Programs" / L"Mouse Engine";
 }
 
+std::string wide_to_utf8(const std::wstring& value) {
+    if (value.empty()) return {};
+    const int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
+    if (size <= 0) return {};
+    std::string out(static_cast<std::size_t>(size), '\0');
+    WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), out.data(), size, nullptr, nullptr);
+    return out;
+}
+
 std::string json_escape(const std::string& value) {
     std::string out;
     for (char c : value) {
@@ -79,12 +91,154 @@ std::string environment_json() {
     return out.str();
 }
 
+struct WindowsMouseIdentity {
+    bool resolved{false};
+    std::wstring interface_path;
+    std::wstring instance_id;
+    std::wstring container_id;
+    std::wstring manufacturer;
+    std::wstring product;
+    std::wstring vid;
+    std::wstring pid;
+};
+
+std::wstring first_multi_sz(const std::vector<wchar_t>& buffer) {
+    if (buffer.empty() || buffer[0] == L'\0') return {};
+    return std::wstring(buffer.data());
+}
+
+std::wstring get_registry_property(HDEVINFO set, SP_DEVINFO_DATA& data, DWORD property) {
+    DWORD required = 0;
+    SetupDiGetDeviceRegistryPropertyW(set, &data, property, nullptr, nullptr, 0, &required);
+    if (required == 0) return {};
+    std::vector<wchar_t> buffer(required / sizeof(wchar_t) + 2);
+    if (!SetupDiGetDeviceRegistryPropertyW(
+            set, &data, property, nullptr,
+            reinterpret_cast<PBYTE>(buffer.data()),
+            static_cast<DWORD>(buffer.size() * sizeof(wchar_t)),
+            nullptr)) {
+        return {};
+    }
+    return first_multi_sz(buffer);
+}
+
+std::wstring get_container_id(HDEVINFO set, SP_DEVINFO_DATA& data) {
+    DEVPROPTYPE type = 0;
+    DWORD required = 0;
+    SetupDiGetDevicePropertyW(
+        set, &data, &DEVPKEY_Device_ContainerId, &type,
+        nullptr, 0, &required, 0);
+    if (required == 0) return {};
+
+    std::vector<BYTE> buffer(required);
+    if (!SetupDiGetDevicePropertyW(
+            set, &data, &DEVPKEY_Device_ContainerId, &type,
+            buffer.data(), static_cast<DWORD>(buffer.size()),
+            nullptr, 0) ||
+        type != DEVPROP_TYPE_GUID ||
+        buffer.size() < sizeof(GUID)) {
+        return {};
+    }
+
+    wchar_t text[64]{};
+    if (StringFromGUID2(*reinterpret_cast<const GUID*>(buffer.data()), text, ARRAYSIZE(text)) == 0) {
+        return {};
+    }
+    return text;
+}
+
+std::wstring get_instance_id(HDEVINFO set, SP_DEVINFO_DATA& data) {
+    DWORD required = 0;
+    SetupDiGetDeviceInstanceIdW(set, &data, nullptr, 0, &required);
+    if (required == 0) return {};
+    std::vector<wchar_t> buffer(required + 1);
+    if (!SetupDiGetDeviceInstanceIdW(set, &data, buffer.data(), static_cast<DWORD>(buffer.size()), nullptr)) {
+        return {};
+    }
+    return buffer.data();
+}
+
+std::wstring extract_hardware_token(const std::wstring& hardware_id, const wchar_t* prefix) {
+    const auto position = hardware_id.find(prefix);
+    if (position == std::wstring::npos) return {};
+    const auto start = position + 4;
+    if (start + 4 > hardware_id.size()) return {};
+    return hardware_id.substr(start, 4);
+}
+
+std::wstring raw_input_device_name(HANDLE device) {
+    UINT required = 0;
+    if (GetRawInputDeviceInfoW(device, RIDI_DEVICENAME, nullptr, &required) == static_cast<UINT>(-1) || required == 0) {
+        return {};
+    }
+    std::vector<wchar_t> buffer(required + 1);
+    if (GetRawInputDeviceInfoW(device, RIDI_DEVICENAME, buffer.data(), &required) == static_cast<UINT>(-1)) {
+        return {};
+    }
+    return buffer.data();
+}
+
+bool path_equal_ci(const std::wstring& left, const std::wstring& right) {
+    return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
+}
+
+WindowsMouseIdentity resolve_setupapi_identity(const std::wstring& raw_device_path) {
+    WindowsMouseIdentity identity;
+    identity.interface_path = raw_device_path;
+
+    HDEVINFO set = SetupDiGetClassDevsW(
+        &GUID_DEVINTERFACE_HID,
+        nullptr,
+        nullptr,
+        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+    if (set == INVALID_HANDLE_VALUE) return identity;
+
+    SP_DEVICE_INTERFACE_DATA interface_data{};
+    interface_data.cbSize = sizeof(interface_data);
+
+    for (DWORD index = 0; SetupDiEnumDeviceInterfaces(set, nullptr, &GUID_DEVINTERFACE_HID, index, &interface_data); ++index) {
+        DWORD required = 0;
+        SetupDiGetDeviceInterfaceDetailW(
+            set, &interface_data, nullptr, 0, &required, nullptr);
+        if (required == 0) continue;
+
+        std::vector<BYTE> detail_buffer(required + sizeof(wchar_t));
+        auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detail_buffer.data());
+        detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+
+        SP_DEVINFO_DATA device_data{};
+        device_data.cbSize = sizeof(device_data);
+        if (!SetupDiGetDeviceInterfaceDetailW(
+                set, &interface_data, detail,
+                static_cast<DWORD>(detail_buffer.size()),
+                nullptr, &device_data)) {
+            continue;
+        }
+
+        if (!path_equal_ci(detail->DevicePath, raw_device_path)) continue;
+
+        identity.resolved = true;
+        identity.instance_id = get_instance_id(set, device_data);
+        identity.container_id = get_container_id(set, device_data);
+        identity.manufacturer = get_registry_property(set, device_data, SPDRP_MFG);
+        identity.product = get_registry_property(set, device_data, SPDRP_DEVICEDESC);
+        const std::wstring hardware_id = get_registry_property(set, device_data, SPDRP_HARDWAREID);
+        identity.vid = extract_hardware_token(hardware_id, L"VID_");
+        identity.pid = extract_hardware_token(hardware_id, L"PID_");
+        break;
+    }
+
+    SetupDiDestroyDeviceInfoList(set);
+    return identity;
+}
+
 struct RawMouseObservation {
     bool available{false};
     bool detail_available{false};
     UINT mouse_count{0};
     DWORD max_buttons{0};
     DWORD max_sample_rate{0};
+    std::vector<WindowsMouseIdentity> identities;
 };
 
 RawMouseObservation observe_raw_mice() {
@@ -115,6 +269,10 @@ RawMouseObservation observe_raw_mice() {
             if (devices[index].dwType != RIM_TYPEMOUSE) continue;
 
             ++observation.mouse_count;
+            const std::wstring raw_path = raw_input_device_name(devices[index].hDevice);
+            if (!raw_path.empty()) {
+                observation.identities.push_back(resolve_setupapi_identity(raw_path));
+            }
             RID_DEVICE_INFO info{};
             info.cbSize = sizeof(info);
             UINT info_size = sizeof(info);
@@ -136,6 +294,10 @@ RawMouseObservation observe_raw_mice() {
     return observation;
 }
 
+std::string wide_json_escape(const std::wstring& value) {
+    return json_escape(wide_to_utf8(value));
+}
+
 std::string snapshot_json() {
     const RawMouseObservation mouse = observe_raw_mice();
     std::ostringstream out;
@@ -147,7 +309,23 @@ std::string snapshot_json() {
         << ", \"mouseCount\": " << mouse.mouse_count
         << ", \"detailAvailable\": " << bool_json(mouse.detail_available)
         << ", \"maxObservedButtons\": " << mouse.max_buttons
-        << ", \"maxObservedSampleRate\": " << mouse.max_sample_rate << " },\n"
+        << ", \"maxObservedSampleRate\": " << mouse.max_sample_rate
+        << ", \"identityResolvedCount\": " << std::count_if(mouse.identities.begin(), mouse.identities.end(), [](const auto& item) { return item.resolved; })
+        << ", \"identities\": [";
+    for (std::size_t i = 0; i < mouse.identities.size(); ++i) {
+        const auto& identity = mouse.identities[i];
+        if (i != 0) out << ",";
+        out << "{\"resolved\":" << bool_json(identity.resolved)
+            << ",\"instanceId\":\"" << wide_json_escape(identity.instance_id)
+            << "\",\"containerId\":\"" << wide_json_escape(identity.container_id)
+            << "\",\"manufacturer\":\"" << wide_json_escape(identity.manufacturer)
+            << "\",\"product\":\"" << wide_json_escape(identity.product)
+            << "\",\"vid\":\"" << wide_json_escape(identity.vid)
+            << "\",\"pid\":\"" << wide_json_escape(identity.pid) << "\"}";
+    }
+    out << "],\n"
+        << "  \"identity\": { \"available\": " << bool_json(!mouse.identities.empty())
+        << ", \"transport\": \"undetermined\" },\n"
         << "  \"latency\": { \"available\": false },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";

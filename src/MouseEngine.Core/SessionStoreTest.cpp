@@ -34,7 +34,7 @@ int main() {
     session.all.timing.idle_gap_count_50ms = 3;
     session.activity.active_run_count = 7;
     session.activity.longest_active_run_packets = 54;
-    session.anomalies.push_back({"gap-1","warning","timing-gap","Observed idle gap above threshold","all"});
+    session.anomalies.push_back({"gap-1","warning","timing-gap","Observed idle gap above threshold","all",1,1.0,{}});
 
     std::string error;
     assert(store.save(session, &error));
@@ -84,6 +84,8 @@ int main() {
     assert(summaries.front().anomalies.front().severity == "warning");
     assert(summaries.front().anomalies.front().type == "timing-gap");
     assert(summaries.front().anomalies.front().stream == "all");
+    assert(summaries.front().anomalies.front().packet_index == 1);
+    assert(summaries.front().anomalies.front().timestamp_ms == 1.0);
     assert(summaries.front().trace_available);
     assert(summaries.front().trace_packet_count == 2);
 

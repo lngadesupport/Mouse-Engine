@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ObservationSession.h"
+#include "ObservationDistribution.h"
 
 #include <algorithm>
 #include <cmath>
@@ -119,6 +120,7 @@ inline mouse_engine::model::ObservationSession build_session(
     session.activity.idle_gap_threshold_ms = rules.idle_gap_threshold_ms;
     session.all.packet_count = packets.size();
     session.all.timing = summarize_timing(packets, rules.idle_gap_threshold_ms);
+    session.all.distribution = to_model_distribution(build_interval_distribution(packets));
 
     std::vector<TimedPacket> movement;
     std::vector<TimedPacket> button;
@@ -135,10 +137,13 @@ inline mouse_engine::model::ObservationSession build_session(
 
     session.movement.packet_count = movement.size();
     session.movement.timing = summarize_timing(movement, rules.idle_gap_threshold_ms);
+    session.movement.distribution = to_model_distribution(build_interval_distribution(movement));
     session.button.packet_count = button.size();
     session.button.timing = summarize_timing(button, rules.idle_gap_threshold_ms);
+    session.button.distribution = to_model_distribution(build_interval_distribution(button));
     session.wheel.packet_count = wheel.size();
     session.wheel.timing = summarize_timing(wheel, rules.idle_gap_threshold_ms);
+    session.wheel.distribution = to_model_distribution(build_interval_distribution(wheel));
 
     const auto runs = find_active_runs(packets, rules);
     session.activity.active_run_count = runs.size();

@@ -172,10 +172,10 @@ private:
         if (buckets_end == std::string::npos) return false;
         const std::string buckets = all.substr(buckets_pos, buckets_end - buckets_pos);
         const std::regex bucket_pattern(
-            "\\{\\\"lowerBoundMs\\\":([-+]?[0-9]+(?:\\\\.[0-9]+)?),"
-            "\\\"upperBoundMs\\\":([-+]?[0-9]+(?:\\\\.[0-9]+)?),"
+            "\\{\\\"lowerBoundMs\\\":([-+]?[0-9]+(?:\\.[0-9]+)?),"
+            "\\\"upperBoundMs\\\":([-+]?[0-9]+(?:\\.[0-9]+)?),"
             "\\\"count\\\":([0-9]+),"
-            "\\\"cumulativeFraction\\\":([-+]?[0-9]+(?:\\\\.[0-9]+)?)\\}");
+            "\\\"cumulativeFraction\\\":([-+]?[0-9]+(?:\\.[0-9]+)?)\\}");
         for (std::sregex_iterator it(buckets.begin(), buckets.end(), bucket_pattern), end; it != end; ++it) {
             model::DistributionBucket bucket;
             bucket.lower_bound_ms = std::stod((*it)[1].str());

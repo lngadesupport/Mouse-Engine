@@ -42,6 +42,7 @@ public:
         model::ObservationSession session;
         if (!recording_) return session;
         session = observation::build_session(session_id_, device_id_, packets_);
+        session.anomalies = observation::detect_timing_irregularities(packets_);
         session.started_at_utc = started_at_utc_;
         session.ended_at_utc = ended_at_utc;
         return session;

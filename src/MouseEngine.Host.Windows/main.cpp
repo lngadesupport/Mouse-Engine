@@ -81,6 +81,7 @@ std::string snapshot_json() {
     std::ostringstream out;
     out << "{\n"
         << "  \"schemaVersion\": 1,\n"
+        << "  \"host\": { \"online\": true, \"platform\": \"windows\", \"architecture\": \"x64\" },\n"
         << "  \"device\": { \"connected\": false },\n"
         << "  \"latency\": { \"available\": false },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
@@ -120,6 +121,12 @@ void print_storage() {
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
 class WebViewHost {
 public:
+    ~WebViewHost() {
+        if (webview_ && navigation_completed_token_.value != 0) {
+            webview_->remove_NavigationCompleted(navigation_completed_token_);
+        }
+    }
+
     bool initialize(HWND hwnd, const std::filesystem::path& data_dir) {
         hwnd_ = hwnd;
         data_dir_ = data_dir;
@@ -140,6 +147,31 @@ public:
     void resize(const RECT& bounds) { if (controller_) controller_->put_Bounds(bounds); }
 
 private:
+    HRESULT post_snapshot() {
+        if (!webview_) return E_FAIL;
+        const std::string json = snapshot_json();
+        const std::wstring wide(json.begin(), json.end());
+        const HRESULT hr = webview_->PostWebMessageAsJson(wide.c_str());
+        if (FAILED(hr)) {
+            show_native_fallback(hwnd_, L"Mouse Engine could not publish its read-only host snapshot to the UI.");
+        }
+        return hr;
+    }
+
+    HRESULT navigation_completed(
+        ICoreWebView2*,
+        ICoreWebView2NavigationCompletedEventArgs* args) {
+        if (!args) return E_INVALIDARG;
+        BOOL success = FALSE;
+        HRESULT hr = args->get_IsSuccess(&success);
+        if (FAILED(hr)) return hr;
+        if (!success) {
+            show_native_fallback(hwnd_, L"Mouse Engine's packaged UI navigation did not complete successfully.");
+            return S_OK;
+        }
+        return post_snapshot();
+    }
+
     HRESULT environment_ready(HRESULT result, ICoreWebView2Environment* environment) {
         if (FAILED(result) || environment == nullptr) {
             show_native_fallback(hwnd_, L"WebView2 Runtime could not be started. Install or repair the Microsoft Edge WebView2 Runtime, then restart Mouse Engine.");
@@ -163,6 +195,28 @@ private:
             show_native_fallback(hwnd_, L"Mouse Engine created the WebView2 controller but could not access the browser instance.");
             return FAILED(hr) ? hr : E_FAIL;
         }
+
+        ComPtr<ICoreWebView2Settings> settings;
+        hr = webview_->get_Settings(&settings);
+        if (FAILED(hr) || !settings) {
+            show_native_fallback(hwnd_, L"Mouse Engine could not access WebView2 settings.");
+            return FAILED(hr) ? hr : E_FAIL;
+        }
+        hr = settings->put_IsWebMessageEnabled(TRUE);
+        if (FAILED(hr)) {
+            show_native_fallback(hwnd_, L"Mouse Engine could not enable its read-only WebView2 message channel.");
+            return hr;
+        }
+
+        hr = webview_->add_NavigationCompleted(
+            Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
+                this, &WebViewHost::navigation_completed).Get(),
+            &navigation_completed_token_);
+        if (FAILED(hr)) {
+            show_native_fallback(hwnd_, L"Mouse Engine could not register its WebView2 navigation observer.");
+            return hr;
+        }
+
         RECT bounds{};
         GetClientRect(hwnd_, &bounds);
         controller_->put_Bounds(bounds);
@@ -185,6 +239,7 @@ private:
     ComPtr<ICoreWebView2Environment> environment_;
     ComPtr<ICoreWebView2Controller> controller_;
     ComPtr<ICoreWebView2> webview_;
+    EventRegistrationToken navigation_completed_token_{};
 };
 #endif
 

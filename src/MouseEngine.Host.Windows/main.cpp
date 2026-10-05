@@ -1,10 +1,15 @@
 #include <windows.h>
 #include <algorithm>
 #include <cstdint>
+#include <cwctype>
+#include <limits>
+#include <optional>
 #include <setupapi.h>
 #include <devpkey.h>
 #include <initguid.h>
 #include <hidclass.h>
+#include <usbiodef.h>
+#include <usbioctl.h>
 #include <cfgmgr32.h>
 #include <shlobj.h>
 #include <shellapi.h>
@@ -111,7 +116,9 @@ const char* direct_transport_json(DirectTransport transport) {
 struct BusTopologyEvidence {
     DirectTransport transport{DirectTransport::Unknown};
     std::vector<std::wstring> ancestors;
+    std::vector<DEVINST> ancestor_devinsts;
     std::wstring location_info;
+    std::wstring device_location_info;
 };
 
 bool starts_with_ci(const std::wstring& value, const wchar_t* prefix) {
@@ -125,9 +132,21 @@ BusTopologyEvidence inspect_bus_topology(DEVINST devinst) {
     BusTopologyEvidence evidence;
     DEVINST current = devinst;
 
+    wchar_t device_location[MAX_DEVICE_ID_LEN]{};
+    ULONG device_location_size = ARRAYSIZE(device_location);
+    ULONG device_location_type = 0;
+    if (CM_Get_DevNode_Registry_PropertyW(
+            devinst, CM_DRP_LOCATION_INFORMATION, &device_location_type,
+            device_location, &device_location_size, 0) == CR_SUCCESS &&
+        device_location[0] != L'\0') {
+        evidence.device_location_info = device_location;
+    }
+
     for (unsigned depth = 0; depth < 32; ++depth) {
         DEVINST parent = 0;
         if (CM_Get_Parent(&parent, current, 0) != CR_SUCCESS) break;
+
+        evidence.ancestor_devinsts.push_back(parent);
 
         wchar_t id_buffer[MAX_DEVICE_ID_LEN]{};
         if (CM_Get_Device_IDW(parent, id_buffer, ARRAYSIZE(id_buffer), 0) == CR_SUCCESS) {
@@ -175,6 +194,133 @@ std::uint64_t topology_hash(const BusTopologyEvidence& evidence) {
     return hash;
 }
 
+struct UsbEndpointEvidence {
+    bool available{false};
+    ULONG connection_index{0};
+    UCHAR speed{0};
+    USHORT device_address{0};
+    ULONG interrupt_in_endpoint_count{0};
+    bool descriptor_interval_available{false};
+    UCHAR descriptor_interval{0};
+    UCHAR descriptor_endpoint_address{0};
+};
+
+std::optional<ULONG> parse_usb_port_index(const std::wstring& location_info) {
+    constexpr std::wstring_view marker = L"Port_#";
+    const auto position = location_info.find(marker);
+    if (position == std::wstring::npos) return std::nullopt;
+
+    std::size_t cursor = position + marker.size();
+    if (cursor == location_info.size() || !std::iswdigit(location_info[cursor])) return std::nullopt;
+
+    ULONG value = 0;
+    for (; cursor < location_info.size() && std::iswdigit(location_info[cursor]); ++cursor) {
+        const ULONG digit = static_cast<ULONG>(location_info[cursor] - L'0');
+        if (value > (std::numeric_limits<ULONG>::max() - digit) / 10) return std::nullopt;
+        value = value * 10 + digit;
+    }
+    if (value == 0) return std::nullopt;
+    return value;
+}
+
+bool is_ancestor_devinst(const std::vector<DEVINST>& ancestors, DEVINST candidate) {
+    return std::find(ancestors.begin(), ancestors.end(), candidate) != ancestors.end();
+}
+
+UsbEndpointEvidence inspect_usb_endpoint_evidence(const BusTopologyEvidence& topology) {
+    UsbEndpointEvidence evidence;
+    const auto port = parse_usb_port_index(topology.device_location_info);
+    if (!port.has_value() || topology.ancestor_devinsts.empty()) return evidence;
+
+    HDEVINFO set = SetupDiGetClassDevsW(
+        &GUID_DEVINTERFACE_USB_HUB,
+        nullptr,
+        nullptr,
+        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+    if (set == INVALID_HANDLE_VALUE) return evidence;
+
+    SP_DEVICE_INTERFACE_DATA interface_data{};
+    interface_data.cbSize = sizeof(interface_data);
+
+    constexpr ULONG kPipeCapacity = 64;
+    for (DWORD index = 0; SetupDiEnumDeviceInterfaces(
+             set, nullptr, &GUID_DEVINTERFACE_USB_HUB, index, &interface_data); ++index) {
+        DWORD required = 0;
+        SetupDiGetDeviceInterfaceDetailW(
+            set, &interface_data, nullptr, 0, &required, nullptr);
+        if (required == 0) continue;
+
+        std::vector<BYTE> detail_buffer(required + sizeof(wchar_t));
+        auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detail_buffer.data());
+        detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+
+        SP_DEVINFO_DATA hub_data{};
+        hub_data.cbSize = sizeof(hub_data);
+        if (!SetupDiGetDeviceInterfaceDetailW(
+                set, &interface_data, detail,
+                static_cast<DWORD>(detail_buffer.size()),
+                nullptr, &hub_data)) {
+            continue;
+        }
+
+        if (!is_ancestor_devinst(topology.ancestor_devinsts, hub_data.DevInst)) continue;
+
+        HANDLE hub = CreateFileW(
+            detail->DevicePath,
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+        if (hub == INVALID_HANDLE_VALUE) continue;
+
+        std::vector<BYTE> buffer(
+            sizeof(USB_NODE_CONNECTION_INFORMATION_EX) +
+            static_cast<std::size_t>(kPipeCapacity) * sizeof(USB_PIPE_INFO));
+        auto* connection = reinterpret_cast<USB_NODE_CONNECTION_INFORMATION_EX*>(buffer.data());
+        connection->ConnectionIndex = *port;
+
+        DWORD returned = 0;
+        const BOOL ok = DeviceIoControl(
+            hub,
+            IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX,
+            connection,
+            sizeof(USB_NODE_CONNECTION_INFORMATION_EX),
+            connection,
+            static_cast<DWORD>(buffer.size()),
+            &returned,
+            nullptr);
+        CloseHandle(hub);
+
+        if (!ok) continue;
+
+        evidence.available = true;
+        evidence.connection_index = connection->ConnectionIndex;
+        evidence.speed = connection->Speed;
+        evidence.device_address = connection->DeviceAddress;
+
+        const ULONG pipe_count = (std::min)(connection->NumberOfOpenPipes, kPipeCapacity);
+        for (ULONG pipe_index = 0; pipe_index < pipe_count; ++pipe_index) {
+            const auto& endpoint = connection->PipeList[pipe_index].EndpointDescriptor;
+            const bool interrupt = (endpoint.bmAttributes & 0x03u) == 0x03u;
+            const bool input = (endpoint.bEndpointAddress & 0x80u) != 0;
+            if (!interrupt || !input) continue;
+
+            ++evidence.interrupt_in_endpoint_count;
+            if (!evidence.descriptor_interval_available) {
+                evidence.descriptor_interval_available = true;
+                evidence.descriptor_interval = endpoint.bInterval;
+                evidence.descriptor_endpoint_address = endpoint.bEndpointAddress;
+            }
+        }
+        break;
+    }
+
+    SetupDiDestroyDeviceInfoList(set);
+    return evidence;
+}
+
 struct WindowsMouseIdentity {
     bool resolved{false};
     std::wstring interface_path;
@@ -186,6 +332,7 @@ struct WindowsMouseIdentity {
     std::wstring pid;
     DirectTransport transport{DirectTransport::Unknown};
     std::uint64_t topology_hash{0};
+    UsbEndpointEvidence usb_endpoint{};
 };
 
 std::wstring first_multi_sz(const std::vector<wchar_t>& buffer) {
@@ -314,6 +461,9 @@ WindowsMouseIdentity resolve_setupapi_identity(const std::wstring& raw_device_pa
         const BusTopologyEvidence topology = inspect_bus_topology(device_data.DevInst);
         identity.transport = topology.transport;
         identity.topology_hash = topology_hash(topology);
+        if (identity.transport == DirectTransport::Usb) {
+            identity.usb_endpoint = inspect_usb_endpoint_evidence(topology);
+        }
         break;
     }
 
@@ -412,12 +562,23 @@ std::string snapshot_json() {
             << "\",\"vid\":\"" << wide_json_escape(identity.vid)
             << "\",\"pid\":\"" << wide_json_escape(identity.pid)
             << "\",\"transport\":\"" << direct_transport_json(identity.transport)
-            << "\",\"topologyHash\":\"" << std::hex << identity.topology_hash << std::dec << "\"}";
+            << "\",\"topologyHash\":\"" << std::hex << identity.topology_hash << std::dec
+            << "\",\"usbEndpoint\":{\"available\":" << bool_json(identity.usb_endpoint.available)
+            << ",\"connectionIndex\":" << identity.usb_endpoint.connection_index
+            << ",\"speedCode\":" << static_cast<unsigned>(identity.usb_endpoint.speed)
+            << ",\"deviceAddress\":" << identity.usb_endpoint.device_address
+            << ",\"interruptInEndpointCount\":" << identity.usb_endpoint.interrupt_in_endpoint_count
+            << ",\"configuredInterval\":{\"available\":false}"
+            << ",\"descriptorInterval\":{\"available\":" << bool_json(identity.usb_endpoint.descriptor_interval_available)
+            << ",\"value\":" << static_cast<unsigned>(identity.usb_endpoint.descriptor_interval)
+            << ",\"endpointAddress\":" << static_cast<unsigned>(identity.usb_endpoint.descriptor_endpoint_address)
+            << "}"
+            << ",\"observedInterval\":{\"available\":false}}}";
     }
     out << "],\n"
         << "  \"identity\": { \"available\": " << bool_json(!mouse.identities.empty())
         << ", \"transport\": \"per-device\" },\n"
-        << "  \"latency\": { \"available\": false },\n"
+        << "  \"latency\": { \"available\": false, \"configuredInterval\": { \"available\": false }, \"descriptorInterval\": { \"available\": false }, \"observedInterval\": { \"available\": false } },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";
     return out.str();

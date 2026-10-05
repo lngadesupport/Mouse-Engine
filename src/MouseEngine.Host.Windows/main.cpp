@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <vector>
 #include <windowsx.h>
 
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
@@ -77,12 +78,48 @@ std::string environment_json() {
     return out.str();
 }
 
+struct RawMouseObservation {
+    bool available{false};
+    UINT mouse_count{0};
+};
+
+RawMouseObservation observe_raw_mice() {
+    RawMouseObservation observation;
+    UINT device_count = 0;
+    if (GetRawInputDeviceList(nullptr, &device_count, sizeof(RAWINPUTDEVICELIST)) == static_cast<UINT>(-1)) {
+        return observation;
+    }
+    observation.available = true;
+    if (device_count == 0) return observation;
+
+    std::vector<RAWINPUTDEVICELIST> devices(device_count);
+    UINT capacity = device_count;
+    const UINT result = GetRawInputDeviceList(
+        devices.data(),
+        &capacity,
+        sizeof(RAWINPUTDEVICELIST));
+    if (result == static_cast<UINT>(-1)) {
+        observation.available = false;
+        return observation;
+    }
+
+    for (UINT index = 0; index < result; ++index) {
+        if (devices[index].dwType == RIM_TYPEMOUSE) {
+            ++observation.mouse_count;
+        }
+    }
+    return observation;
+}
+
 std::string snapshot_json() {
+    const RawMouseObservation mouse = observe_raw_mice();
     std::ostringstream out;
     out << "{\n"
         << "  \"schemaVersion\": 1,\n"
         << "  \"host\": { \"online\": true, \"platform\": \"windows\", \"architecture\": \"x64\" },\n"
-        << "  \"device\": { \"connected\": false },\n"
+        << "  \"device\": { \"observationAvailable\": " << bool_json(mouse.available)
+        << ", \"connected\": " << bool_json(mouse.available && mouse.mouse_count > 0)
+        << ", \"mouseCount\": " << mouse.mouse_count << " },\n"
         << "  \"latency\": { \"available\": false },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";

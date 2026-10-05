@@ -212,7 +212,7 @@ private:
                     "\\\"message\\\":\\\"([^\\\"]*)\\\","
                     "\\\"stream\\\":\\\"([^\\\"]*)\\\","
                     "\\\"packetIndex\\\":([0-9]+),"
-                    "\\\"timestampMs\\\":([-+]?[0-9]+(?:\\\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)\\\}");
+                    "\\\"timestampMs\\\":([-+]?[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)\\}");
                 for (std::sregex_iterator it(anomaly_json.begin(), anomaly_json.end(), anomaly_pattern), end; it != end; ++it) {
                     SessionAnomalySummary anomaly;
                     anomaly.id = (*it)[1].str();

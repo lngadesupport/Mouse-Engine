@@ -34,6 +34,7 @@ const hostRequired = [
   'add_NavigationCompleted',
   'NavigationCompleted',
   'schemaVersion',
+  'schemaVersion": 2',
   'usbioctl.h',
   'IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX',
   'USB_NODE_CONNECTION_INFORMATION_EX',

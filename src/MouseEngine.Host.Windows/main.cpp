@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <setupapi.h>
 #include <devpkey.h>
+#include <initguid.h>
 #include <hidclass.h>
 #include <shlobj.h>
 #include <shellapi.h>

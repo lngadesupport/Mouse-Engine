@@ -52,7 +52,8 @@ try {
 
     Write-Output "INSTALL=PASS"
     Write-Output "INSTALL_ROOT=$installRoot"
-    Write-Output "USER_DATA=$env:LOCALAPPDATA\Mouse Engine"
+    Write-Output "WORKSPACE=$env:USERPROFILE\Documents\Mouse Engine"
+    Write-Output "CACHE=$env:LOCALAPPDATA\Mouse Engine"
 } catch {
     if (Test-Path $stageRoot) { Remove-Item $stageRoot -Recurse -Force -ErrorAction SilentlyContinue }
     throw

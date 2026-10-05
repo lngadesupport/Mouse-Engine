@@ -326,11 +326,16 @@ UsbEndpointEvidence inspect_usb_endpoint_evidence(const BusTopologyEvidence& top
     return evidence;
 }
 
+struct ObservedInputStream {
+    std::size_t packet_count{0};
+    mouse_engine::windows::InputTimingSummary timing{};
+};
+
 struct ObservedInputStreams {
-    mouse_engine::windows::InputTimingSummary all{};
-    mouse_engine::windows::InputTimingSummary movement{};
-    mouse_engine::windows::InputTimingSummary button{};
-    mouse_engine::windows::InputTimingSummary wheel{};
+    ObservedInputStream all{};
+    ObservedInputStream movement{};
+    ObservedInputStream button{};
+    ObservedInputStream wheel{};
 };
 
 struct ObservedInputEvidence {
@@ -535,15 +540,19 @@ public:
                 : 0;
 
         const auto timestamp = static_cast<std::uint64_t>(now.QuadPart);
-        timing.all.record(timestamp, frequency_ticks_);
+        ++timing.all.packet_count;
+        timing.all.accumulator.record(timestamp, frequency_ticks_);
         if (raw_mouse_has_movement(mouse.lLastX, mouse.lLastY)) {
-            timing.movement.record(timestamp, frequency_ticks_);
+            ++timing.movement.packet_count;
+            timing.movement.accumulator.record(timestamp, frequency_ticks_);
         }
         if (raw_mouse_has_button_event(mouse.usButtonFlags)) {
-            timing.button.record(timestamp, frequency_ticks_);
+            ++timing.button.packet_count;
+            timing.button.accumulator.record(timestamp, frequency_ticks_);
         }
         if (raw_mouse_has_wheel_event(mouse.usButtonFlags)) {
-            timing.wheel.record(timestamp, frequency_ticks_);
+            ++timing.wheel.packet_count;
+            timing.wheel.accumulator.record(timestamp, frequency_ticks_);
         }
 
         return true;
@@ -564,11 +573,15 @@ public:
         if (it == per_device_.end()) return false;
 
         out = {};
+        out.streams.all.packet_count = it->second.all.packet_count;
+        out.streams.movement.packet_count = it->second.movement.packet_count;
+        out.streams.button.packet_count = it->second.button.packet_count;
+        out.streams.wheel.packet_count = it->second.wheel.packet_count;
         out.available =
-            it->second.all.snapshot(out.streams.all);
-        it->second.movement.snapshot(out.streams.movement);
-        it->second.button.snapshot(out.streams.button);
-        it->second.wheel.snapshot(out.streams.wheel);
+            it->second.all.accumulator.snapshot(out.streams.all.timing);
+        it->second.movement.accumulator.snapshot(out.streams.movement.timing);
+        it->second.button.accumulator.snapshot(out.streams.button.timing);
+        it->second.wheel.accumulator.snapshot(out.streams.wheel.timing);
         return out.available;
     }
 
@@ -588,10 +601,15 @@ public:
 
 private:
     struct DeviceTiming {
-        mouse_engine::windows::InputTimingAccumulator all;
-        mouse_engine::windows::InputTimingAccumulator movement;
-        mouse_engine::windows::InputTimingAccumulator button;
-        mouse_engine::windows::InputTimingAccumulator wheel;
+        struct StreamTiming {
+            std::size_t packet_count{0};
+            mouse_engine::windows::InputTimingAccumulator accumulator;
+        };
+
+        StreamTiming all;
+        StreamTiming movement;
+        StreamTiming button;
+        StreamTiming wheel;
     };
 
     std::uint64_t frequency_ticks_{0};
@@ -683,6 +701,14 @@ std::string timing_summary_json(
     return out.str();
 }
 
+std::string timing_stream_json(const ObservedInputStream& stream) {
+    std::ostringstream out;
+    out << "{\"packetCount\":" << stream.packet_count
+        << ",\"timing\":" << timing_summary_json(stream.timing)
+        << "}";
+    return out.str();
+}
+
 std::string snapshot_json() {
     RawMouseObservation mouse = observe_raw_mice();
     for (auto& identity : mouse.identities) {
@@ -727,10 +753,10 @@ std::string snapshot_json() {
             << bool_json(identity.observed_input.available)
             << ",\"scope\":\"WM_INPUT arrival inter-arrival\","
             << "\"streams\":{"
-            << "\"all\":" << timing_summary_json(identity.observed_input.streams.all)
-            << ",\"movement\":" << timing_summary_json(identity.observed_input.streams.movement)
-            << ",\"button\":" << timing_summary_json(identity.observed_input.streams.button)
-            << ",\"wheel\":" << timing_summary_json(identity.observed_input.streams.wheel)
+            << "\"all\":" << timing_stream_json(identity.observed_input.streams.all)
+            << ",\"movement\":" << timing_stream_json(identity.observed_input.streams.movement)
+            << ",\"button\":" << timing_stream_json(identity.observed_input.streams.button)
+            << ",\"wheel\":" << timing_stream_json(identity.observed_input.streams.wheel)
             << "}}}";
     }
     out << "],\n"

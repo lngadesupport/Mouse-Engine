@@ -37,9 +37,27 @@ inline void append_timing(std::ostringstream& out, const model::TimingMeasuremen
         << "}";
 }
 
+inline void append_distribution(std::ostringstream& out, const model::TimingDistribution& distribution) {
+    out << "{\"sampleCount\":" << distribution.sample_count
+        << ",\"meanIntervalMs\":" << std::setprecision(15) << distribution.mean_interval_ms
+        << ",\"bucketWidthMs\":" << distribution.bucket_width_ms
+        << ",\"buckets\":[";
+    for (std::size_t i = 0; i < distribution.buckets.size(); ++i) {
+        if (i != 0) out << ",";
+        const auto& bucket = distribution.buckets[i];
+        out << "{\"lowerBoundMs\":" << bucket.lower_bound_ms
+            << ",\"upperBoundMs\":" << bucket.upper_bound_ms
+            << ",\"count\":" << bucket.count
+            << ",\"cumulativeFraction\":" << bucket.cumulative_fraction << "}";
+    }
+    out << "]}";
+}
+
 inline void append_stream(std::ostringstream& out, const model::ObservationStream& stream) {
     out << "{\"packetCount\":" << stream.packet_count << ",\"timing\":";
     append_timing(out, stream.timing);
+    out << ",\"distribution\":";
+    append_distribution(out, stream.distribution);
     out << "}";
 }
 

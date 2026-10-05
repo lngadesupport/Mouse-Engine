@@ -6,6 +6,8 @@ set(WEBVIEW2_SDK_DIR "" CACHE PATH "Pinned Microsoft WebView2 SDK directory")
 
 add_executable(MouseEngine.Host.Windows WIN32
     main.cpp
+    InputTiming.cpp
+    InputTiming.h
 )
 
 target_compile_features(MouseEngine.Host.Windows PRIVATE cxx_std_20)
@@ -35,3 +37,12 @@ set_target_properties(MouseEngine.Host.Windows PROPERTIES
     OUTPUT_NAME "MouseEngine.Host.Windows"
     WIN32_EXECUTABLE TRUE
 )
+
+add_executable(MouseEngine.InputTimingTest
+    InputTimingTest.cpp
+    InputTiming.cpp
+    InputTiming.h
+)
+target_compile_features(MouseEngine.InputTimingTest PRIVATE cxx_std_20)
+target_compile_definitions(MouseEngine.InputTimingTest PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+add_test(NAME MouseEngine.InputTimingTest COMMAND MouseEngine.InputTimingTest)

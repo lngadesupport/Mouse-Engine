@@ -1150,6 +1150,9 @@ public:
         if (webview_ && navigation_completed_token_.value != 0) {
             webview_->remove_NavigationCompleted(navigation_completed_token_);
         }
+        if (webview_ && web_message_received_token_.value != 0) {
+            webview_->remove_WebMessageReceived(web_message_received_token_);
+        }
     }
 
     bool initialize(HWND hwnd, const std::filesystem::path& data_dir) {

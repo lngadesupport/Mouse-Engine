@@ -87,7 +87,11 @@ jobs:
           if ($snapshot.device.identityResolvedCount -isnot [int] -or $snapshot.device.identityResolvedCount -lt 0) { throw 'Resolved identity count must be a non-negative integer.' }
           if ($snapshot.device.identities -isnot [array]) { throw 'Identity observations must be an array.' }
           if ($snapshot.identity.available -isnot [bool]) { throw 'Identity availability must be boolean.' }
-          if ($snapshot.identity.transport -ne 'undetermined') { throw 'Transport must remain undetermined until topology evidence exists.' }
+          if ($snapshot.identity.transport -ne 'per-device') { throw 'Transport must remain per-device; no global transport claim is permitted.' }
+          foreach ($identity in $snapshot.device.identities) {
+            if ($identity.resolved -and $identity.transport -notin @('Usb', 'Bluetooth', 'Unknown')) { throw 'Unexpected direct transport classification.' }
+            if ($identity.resolved -and [string]::IsNullOrWhiteSpace($identity.topologyHash)) { throw 'Resolved identity must carry a topology evidence hash.' }
+          }
           if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
           Write-Output 'host_snapshot_contract: PASS'
 

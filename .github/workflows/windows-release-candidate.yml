@@ -94,6 +94,17 @@ jobs:
           if ($snapshot.device.identityResolvedCount -isnot [int] -or $snapshot.device.identityResolvedCount -lt 0) { throw 'Resolved identity count must be a non-negative integer.' }
           if ($snapshot.device.identities -isnot [array]) { throw 'Identity observations must be an array.' }
           if ($snapshot.identity.available -isnot [bool]) { throw 'Identity availability must be boolean.' }
+          if ($snapshot.sessions.available -isnot [bool]) { throw 'Session history availability must be boolean.' }
+          if ($snapshot.sessions.items -isnot [array]) { throw 'Session history items must be an array.' }
+          foreach ($session in $snapshot.sessions.items) {
+            if ([string]::IsNullOrWhiteSpace($session.id)) { throw 'Persisted session id must be present.' }
+            if ([string]::IsNullOrWhiteSpace($session.deviceId)) { throw 'Persisted session device id must be present.' }
+            if ($session.packetCount -lt 0 -or $session.intervalCount -lt 0) { throw 'Persisted session counts must be non-negative.' }
+            if ($session.medianIntervalMs -lt 0 -or $session.p95IntervalMs -lt 0 -or $session.jitterP95MinusMedianMs -lt 0) { throw 'Persisted session timing must be non-negative.' }
+            if ($session.idleGapCount50ms -lt 0 -or $session.activeRunCount -lt 0 -or $session.longestActiveRunPackets -lt 0) { throw 'Persisted session activity must be non-negative.' }
+            if ($session.complete -isnot [bool]) { throw 'Persisted session completeness must be boolean.' }
+          }
+
           if ($snapshot.identity.transport -ne 'per-device') { throw 'Transport must remain per-device.' }
 
           foreach ($identity in $snapshot.device.identities) {

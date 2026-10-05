@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <windowsx.h>
 
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
 #include <wrl.h>
@@ -14,6 +15,10 @@
 #endif
 
 namespace {
+
+std::filesystem::path executable_directory() { wchar_t buffer[MAX_PATH]{}; DWORD n=GetModuleFileNameW(nullptr,buffer,MAX_PATH); return n ? std::filesystem::path(buffer).parent_path() : std::filesystem::path{}; }
+std::filesystem::path ui_entrypoint() { return executable_directory() / L"ui" / L"index.html"; }
+void show_native_fallback(HWND hwnd, const wchar_t* reason) { SetWindowTextW(hwnd,L"Mouse Engine — UI fallback"); MessageBoxW(hwnd,reason,L"Mouse Engine",MB_OK|MB_ICONINFORMATION); }
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
 using Microsoft::WRL::ComPtr;
 #endif
@@ -132,6 +137,7 @@ public:
     }
 
     bool ready() const noexcept { return controller_ != nullptr && webview_ != nullptr; }
+    void resize(const RECT& bounds) { if (controller_) controller_->put_Bounds(bounds); }
 
 private:
     HRESULT environment_ready(HRESULT result, ICoreWebView2Environment* environment) {
@@ -151,7 +157,11 @@ private:
         RECT bounds{};
         GetClientRect(hwnd_, &bounds);
         controller_->put_Bounds(bounds);
-        return webview_->Navigate(L"data:text/html,<html><body style='font-family:Segoe UI;background:#0b0d10;color:#d9f5ff;padding:40px'><h1>Mouse Engine</h1><p>Host iniciado.</p><p>Sem dispositivo físico detectado neste momento.</p><p>Mutations: denied by default.</p></body></html>");
+        const auto html = ui_entrypoint();
+        if (!std::filesystem::exists(html)) return E_FILE_NOT_FOUND;
+        std::wstring uri = L"file:///";
+        for (wchar_t c : html.wstring()) uri += (c == L'\\' ? L'/' : c);
+        return webview_->Navigate(uri.c_str());
     }
 
     HWND hwnd_{};
@@ -171,19 +181,18 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
         webview = new WebViewHost();
         if (!webview->initialize(hwnd, storage_root() / L"WebView2")) {
-            delete webview;
-            webview = nullptr;
+            delete webview; webview = nullptr;
+            show_native_fallback(hwnd,L"WebView2 could not be initialized. Install the Microsoft Edge WebView2 Runtime, then restart Mouse Engine.");
         }
 #else
         (void)lparam;
+        show_native_fallback(hwnd,L"This Mouse Engine build was compiled without WebView2 support.");
 #endif
         return 0;
 
     case WM_SIZE:
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
-        if (webview && webview->ready()) {
-            // The controller bounds are managed by WebView2; a future UI bridge can refine this.
-        }
+        if (webview && webview->ready()) { RECT bounds{}; GetClientRect(hwnd,&bounds); webview->resize(bounds); }
 #endif
         return 0;
 

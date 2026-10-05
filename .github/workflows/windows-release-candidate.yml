@@ -1,6 +1,8 @@
 name: Windows Release Candidate
 
 on:
+  push:
+    branches: [feature/phase38-installer-real]
   pull_request:
     branches: [main]
   workflow_dispatch:

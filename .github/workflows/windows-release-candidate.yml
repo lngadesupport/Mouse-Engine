@@ -103,7 +103,9 @@ jobs:
             foreach ($streamName in @('all','movement','button','wheel')) {
               $stream = $identity.observedInput.streams.$streamName
               if ($null -eq $stream) { throw "Observed input stream missing: $streamName" }
-              if ($stream.intervalCount -lt 0 -or $stream.minIntervalMs -lt 0 -or $stream.medianIntervalMs -lt 0 -or $stream.p95IntervalMs -lt 0 -or $stream.maxIntervalMs -lt 0 -or $stream.jitterP95MinusMedianMs -lt 0) {
+              if ($stream.packetCount -lt 0) { throw "Observed packet count must be non-negative: $streamName" }
+              if ($null -eq $stream.timing) { throw "Observed timing summary missing: $streamName" }
+              if ($stream.timing.intervalCount -lt 0 -or $stream.timing.minIntervalMs -lt 0 -or $stream.timing.medianIntervalMs -lt 0 -or $stream.timing.p95IntervalMs -lt 0 -or $stream.timing.maxIntervalMs -lt 0 -or $stream.timing.jitterP95MinusMedianMs -lt 0) {
                 throw "Observed timing values must be non-negative: $streamName"
               }
             }

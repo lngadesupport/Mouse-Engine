@@ -78,3 +78,9 @@ add_executable(MouseEngine.SessionTraceTest
 target_link_libraries(MouseEngine.SessionTraceTest PRIVATE MouseEngine.Core)
 target_compile_features(MouseEngine.SessionTraceTest PRIVATE cxx_std_20)
 add_test(NAME MouseEngine.SessionTraceTest COMMAND MouseEngine.SessionTraceTest)
+add_executable(MouseEngine.SessionTraceStoreTest
+    SessionTraceStoreTest.cpp
+)
+target_link_libraries(MouseEngine.SessionTraceStoreTest PRIVATE MouseEngine.Core)
+target_compile_features(MouseEngine.SessionTraceStoreTest PRIVATE cxx_std_20)
+add_test(NAME MouseEngine.SessionTraceStoreTest COMMAND MouseEngine.SessionTraceStoreTest)

@@ -158,7 +158,7 @@ private:
         GetClientRect(hwnd_, &bounds);
         controller_->put_Bounds(bounds);
         const auto html = ui_entrypoint();
-        if (!std::filesystem::exists(html)) return E_FILE_NOT_FOUND;
+        if (!std::filesystem::exists(html)) return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         std::wstring uri = L"file:///";
         for (wchar_t c : html.wstring()) uri += (c == L'\\' ? L'/' : c);
         return webview_->Navigate(uri.c_str());

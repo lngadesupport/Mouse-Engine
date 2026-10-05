@@ -209,6 +209,7 @@ public:
     }
 
     bool ready() const noexcept { return controller_ != nullptr && webview_ != nullptr; }
+    HRESULT publish_snapshot() { return ui_ready_ ? post_snapshot() : S_FALSE; }
     void resize(const RECT& bounds) { if (controller_) controller_->put_Bounds(bounds); }
 
 private:
@@ -234,7 +235,9 @@ private:
             show_native_fallback(hwnd_, L"Mouse Engine's packaged UI navigation did not complete successfully.");
             return S_OK;
         }
-        return post_snapshot();
+        const HRESULT snapshot = post_snapshot();
+        if (SUCCEEDED(snapshot)) ui_ready_ = true;
+        return snapshot;
     }
 
     HRESULT environment_ready(HRESULT result, ICoreWebView2Environment* environment) {
@@ -305,8 +308,18 @@ private:
     ComPtr<ICoreWebView2Controller> controller_;
     ComPtr<ICoreWebView2> webview_;
     EventRegistrationToken navigation_completed_token_{};
+    bool ui_ready_{false};
 };
 #endif
+
+bool register_mouse_device_notifications(HWND hwnd) {
+    RAWINPUTDEVICE mouse{};
+    mouse.usUsagePage = 0x01;
+    mouse.usUsage = 0x02;
+    mouse.dwFlags = RIDEV_DEVNOTIFY;
+    mouse.hwndTarget = hwnd;
+    return RegisterRawInputDevices(&mouse, 1, sizeof(mouse)) == TRUE;
+}
 
 LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
@@ -316,6 +329,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
     case WM_CREATE:
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
         webview = new WebViewHost();
+        register_mouse_device_notifications(hwnd);
         if (!webview->initialize(hwnd, storage_root() / L"WebView2")) {
             delete webview; webview = nullptr;
             show_native_fallback(hwnd,L"WebView2 could not be initialized. Install the Microsoft Edge WebView2 Runtime, then restart Mouse Engine.");
@@ -329,6 +343,14 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
     case WM_SIZE:
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
         if (webview && webview->ready()) { RECT bounds{}; GetClientRect(hwnd,&bounds); webview->resize(bounds); }
+#endif
+        return 0;
+
+    case WM_INPUT_DEVICE_CHANGE:
+#ifdef MOUSE_ENGINE_WEBVIEW2_SDK
+        if ((wparam == GIDC_ARRIVAL || wparam == GIDC_REMOVAL) && webview && webview->ready()) {
+            webview->publish_snapshot();
+        }
 #endif
         return 0;
 

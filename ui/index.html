@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Mouse Engine</title>
+<style>
+:root{
+  --bg:#090c0f;--panel:#10161b;--panel-2:#151d23;--panel-3:#1a252c;--line:#2a3740;
+  --text:#edf2f6;--muted:#9ba9b4;--soft:#71808b;--accent:#62d7ff;--accent-bg:#0c2029;
+  --ok:#8fe0bd;--warn:#ffd98a;--danger:#ff9f9f;--shadow:0 18px 50px rgba(0,0,0,.24)
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI",system-ui,sans-serif}
+body{overflow-x:hidden}
+button{font:inherit}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.skip{position:absolute;left:12px;top:-60px;padding:10px 14px;border-radius:8px;background:var(--accent);color:#061016;z-index:50;font-weight:700}
+.skip:focus{top:12px}
+.app{min-height:100vh;display:grid;grid-template-columns:240px 1fr}
+.sidebar{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:#0c1115;padding:22px 14px;display:flex;flex-direction:column;gap:20px}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 10px 12px}
+.brand-mark{width:34px;height:34px;border:1px solid #35515d;border-radius:10px;background:linear-gradient(145deg,#182831,#0e171c);display:grid;place-items:center;color:var(--accent);font-weight:800}
+.brand-name{font-weight:750;letter-spacing:.1px}.brand-sub{font-size:11px;color:var(--soft)}
+.nav{display:grid;gap:4px}
+.nav button{border:1px solid transparent;background:transparent;color:var(--muted);padding:10px 11px;border-radius:9px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px}
+.nav button:hover{background:#11191e;color:var(--text)}
+.nav button[aria-current=true]{background:var(--accent-bg);border-color:#1f5264;color:var(--text)}
+.nav-icon{width:18px;text-align:center;color:var(--soft)}.nav button[aria-current=true] .nav-icon{color:var(--accent)}
+.sidebar-footer{margin-top:auto;border-top:1px solid var(--line);padding:14px 10px;color:var(--soft);font-size:11px}
+.host-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:6px}
+main{min-width:0;padding:26px 34px 46px}
+.topbar{max-width:1280px;margin:0 auto 24px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--soft);font-weight:700}
+h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.025em}
+.top-actions{display:flex;align-items:center;gap:9px}
+.pill{border:1px solid var(--line);background:var(--panel);color:var(--muted);padding:7px 10px;border-radius:999px;font-size:12px}
+.content{max-width:1280px;margin:0 auto}
+.view{display:none}.view.active{display:block}
+.hero{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(270px,.8fr);gap:16px;margin-bottom:16px}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:16px;box-shadow:var(--shadow)}
+.hero-card{padding:26px}
+.hero-card h2{margin:0 0 8px;font-size:24px}.hero-card p{margin:0;color:var(--muted);max-width:680px}
+.state-strip{margin-top:22px;display:flex;flex-wrap:wrap;gap:8px}
+.state{padding:7px 10px;border:1px solid var(--line);background:var(--panel-2);border-radius:8px;color:var(--muted);font-size:12px}
+.state strong{color:var(--text)}
+.evidence{padding:20px}.evidence h3{margin:0 0 13px;font-size:14px}.evidence-list{display:grid;gap:10px}
+.evidence-row{display:flex;align-items:flex-start;gap:10px}.evidence-mark{width:8px;height:8px;border-radius:50%;background:#53626c;margin-top:7px;flex:0 0 auto}.evidence-copy{min-width:0}.evidence-copy strong{display:block;font-size:12px}.evidence-copy span{display:block;color:var(--soft);font-size:11px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.section-card{padding:20px;min-height:150px}.section-card h3{margin:0 0 6px}.section-card p{margin:0;color:var(--muted)}
+.metric{font-size:24px;font-weight:700;margin-top:16px}.metric.muted{font-size:16px;color:var(--soft);font-weight:600}
+.empty{padding:34px;text-align:center;border:1px dashed #33414a;background:#0d1317;border-radius:14px}
+.empty h2{margin:0 0 7px;font-size:20px}.empty p{margin:0 auto;color:var(--muted);max-width:620px}
+.cap-list{display:grid;gap:8px;margin-top:15px}.cap{display:flex;justify-content:space-between;gap:15px;padding:10px 11px;border-radius:9px;background:var(--panel-2);border:1px solid #243038;color:var(--muted)}
+.cap b{color:var(--text);font-weight:600}.pending{color:var(--warn)}
+.table-like{overflow:auto}.row{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px;padding:11px 12px;border-bottom:1px solid #202b32;color:var(--muted)}.row.head{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--soft)}.row:last-child{border-bottom:0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.btn{border:1px solid var(--line);background:var(--panel-2);color:var(--text);padding:9px 12px;border-radius:9px;cursor:pointer}.btn:hover{border-color:#45606c;background:#1a252c}.btn.primary{border-color:#2d6174;background:var(--accent-bg)}.btn[disabled]{opacity:.45;cursor:not-allowed}
+.notice{padding:13px 14px;border-left:3px solid #596872;background:#12191e;color:var(--muted);border-radius:0 9px 9px 0}.notice strong{color:var(--text)}
+.footer-note{margin-top:18px;color:var(--soft);font-size:11px}
+@media(max-width:900px){.app{grid-template-columns:72px 1fr}.sidebar{padding:18px 9px}.brand{justify-content:center}.brand-copy,.sidebar-footer,.nav-label{display:none}.nav button{justify-content:center}.hero{grid-template-columns:1fr}.grid,.grid.two{grid-template-columns:1fr}main{padding:22px 18px}}
+@media(max-width:560px){.app{display:block}.sidebar{position:sticky;z-index:20;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px;display:block}.brand{display:none}.nav{display:flex;overflow:auto}.nav button{min-width:48px;justify-content:center}.nav-icon{width:auto}.topbar{align-items:flex-start}.top-actions{display:none}main{padding:18px 12px}.hero-card{padding:20px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<div class="app" id="app">
+<aside class="sidebar" aria-label="Primary navigation">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">M</div>
+    <div class="brand-copy"><div class="brand-name">Mouse Engine</div><div class="brand-sub">Universal control engine</div></div>
+  </div>
+  <nav class="nav" id="navigation">
+    <button data-view="overview" aria-current="true"><span class="nav-icon">⌂</span><span class="nav-label">Overview</span></button>
+    <button data-view="devices"><span class="nav-icon">◉</span><span class="nav-label">Devices</span></button>
+    <button data-view="performance"><span class="nav-icon">↯</span><span class="nav-label">Performance</span></button>
+    <button data-view="controls"><span class="nav-icon">☷</span><span class="nav-label">Controls</span></button>
+    <button data-view="profiles"><span class="nav-icon">▤</span><span class="nav-label">Profiles</span></button>
+    <button data-view="analyzer"><span class="nav-icon">⌁</span><span class="nav-label">Analyzer</span></button>
+    <button data-view="latency"><span class="nav-icon">◌</span><span class="nav-label">Latency Lab</span></button>
+    <button data-view="diagnostics"><span class="nav-icon">⌕</span><span class="nav-label">Diagnostics</span></button>
+    <button data-view="firmware"><span class="nav-icon">⬢</span><span class="nav-label">Firmware</span></button>
+    <button data-view="settings"><span class="nav-icon">⚙</span><span class="nav-label">Settings</span></button>
+  </nav>
+  <div class="sidebar-footer"><span class="host-dot"></span>Host online<br><span style="margin-left:13px">Mutation policy: denied by default</span></div>
+</aside>
+
+<main id="main" tabindex="-1">
+  <div class="topbar">
+    <div><div class="eyebrow">Mouse Engine</div><h1 id="page-title">Overview</h1></div>
+    <div class="top-actions"><span class="pill" id="device-pill" aria-live="polite">No device telemetry available</span><span class="pill" id="snapshot-pill" aria-live="polite">Host snapshot: awaiting</span><span class="pill">Read-only session</span></div>
+  </div>
+
+  <div class="content">
+    <section class="view active" id="view-overview" aria-labelledby="page-title">
+      <div class="hero">
+        <article class="card hero-card">
+          <div class="eyebrow">System status</div>
+          <h2>Evidence before configuration.</h2>
+          <p>Mouse Engine separates device identity, observed evidence, capabilities and mutation authorization. Controls appear only when the host proves that the exact operation is supported.</p>
+          <div class="state-strip">
+            <span class="state">Host <strong>online</strong></span>
+            <span class="state">Mutation <strong>DENIED BY DEFAULT</strong></span>
+            <span class="state">Device <strong id="overview-device-state">awaiting evidence</strong></span>
+          </div>
+        </article>
+        <aside class="card evidence" aria-label="Evidence Rail">
+          <h3>Evidence Rail</h3>
+          <div class="evidence-list">
+            <div class="evidence-row"><span class="evidence-mark"></span><div class="evidence-copy"><strong>Physical identity</strong><span id="evidence-identity-state">Awaiting device observation</span></div></div>
+            <div class="evidence-row"><span class="evidence-mark"></span><div class="evidence-copy"><strong>Transport</strong><span>Not classified without evidence</span></div></div>
+            <div class="evidence-row"><span class="evidence-mark"></span><div class="evidence-copy"><strong>Capabilities</strong><span>Not presented before resolution</span></div></div>
+            <div class="evidence-row"><span class="evidence-mark"></span><div class="evidence-copy"><strong>Authorization</strong><span>Write operations remain denied</span></div></div>
+          </div>
+        </aside>
+      </div>
+      <div class="empty card">
+        <h2>No device telemetry available</h2>
+        <p>Connect a mouse and the host will populate this surface from observed device state. Until then, Mouse Engine intentionally avoids inventing DPI, polling, latency or capability values.</p>
+        <div class="actions"><button class="btn primary" data-view="devices">Open Devices</button><button class="btn" data-view="diagnostics">Open Diagnostics</button></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-devices">
+      <div class="empty card"><h2>Devices</h2><p id="devices-summary">No device telemetry available. Device discovery remains read-only until a physical observation is supplied by the Windows host.</p></div>
+      <div class="grid" style="margin-top:16px">
+        <article class="card section-card"><h3>Identity</h3><p>VID/PID, manufacturer, product and Windows identity are shown only when SetupAPI resolves the observed Raw Input interface.</p><div class="metric muted" id="device-identity-metric">Awaiting evidence</div><div class="cap-list" style="margin-top:12px"><div class="cap"><b>VID / PID</b><span id="device-vidpid-metric">Awaiting evidence</span></div><div class="cap"><b>Manufacturer / Product</b><span id="device-manufacturer-metric">Awaiting evidence</span></div><div class="cap"><b>Container ID</b><span id="device-container-metric">Awaiting evidence</span></div><div class="cap"><b>Instance ID</b><span id="device-instance-metric">Awaiting evidence</span></div></div></article>
+        <article class="card section-card"><h3>Transport</h3><p>USB, Bluetooth or receiver correlation is classified only from evidence-backed topology.</p><div class="metric muted" id="device-transport-metric">Awaiting evidence</div></article>
+        <article class="card section-card"><h3>Compatibility</h3><p>Compatibility records and confidence are resolved independently from the generic HID surface.</p><div class="metric muted">Awaiting evidence</div></article>
+        <article class="card section-card"><h3>Observed device detail</h3><p>Read-only fields from the Windows Raw Input device descriptor. These are observations, not configuration claims.</p><div class="cap-list"><div class="cap"><b>Buttons</b><span id="device-buttons-metric">Awaiting evidence</span></div><div class="cap"><b>Sample data rate</b><span id="device-sample-rate-metric">Awaiting evidence</span></div></div></article>
+        <article class="card section-card"><h3>USB endpoint evidence</h3><p>The host queries the USB hub path without changing device state. Descriptor evidence is kept separate from configured and observed timing.</p><div class="cap-list"><div class="cap"><b>Connection</b><span id="device-usb-connection-metric">Awaiting evidence</span></div><div class="cap"><b>Interrupt IN endpoints</b><span id="device-usb-endpoint-count">Awaiting evidence</span></div><div class="cap"><b>Device reported</b><span id="device-usb-descriptor-interval">Awaiting evidence</span></div></div></article>
+        <article class="card section-card"><h3>Observed input timing</h3><p>Monotonic host arrival timing for Raw Input packets. This is an observed input-stream statistic, not a claimed device polling frequency.</p><div class="cap-list"><div class="cap"><b>Intervals</b><span id="device-observed-count">Not measured</span></div><div class="cap"><b>Median</b><span id="device-observed-median">Not measured</span></div><div class="cap"><b>P95</b><span id="device-observed-p95">Not measured</span></div><div class="cap"><b>Jitter (P95 − median)</b><span id="device-observed-jitter">Not measured</span></div></div></article>
+      </div>
+    </section>
+
+    <section class="view" id="view-performance">
+      <div class="grid">
+        <article class="card section-card"><h3>Polling</h3><p>Observed polling cadence will be shown only after a valid measurement session.</p><div class="metric muted">Not measured</div></article>
+        <article class="card section-card"><h3>Input reports</h3><p>Report cadence and transport evidence are separated from configured values.</p><div class="metric muted">Not measured</div></article>
+        <article class="card section-card"><h3>System timing</h3><p>DPC/ISR and scheduler observations are correlation data, not automatic causal claims.</p><div class="metric muted">Not measured</div></article>
+      </div>
+      <div class="notice" style="margin-top:16px"><strong>Measurement rule:</strong> missing evidence stays missing. Mouse Engine does not synthesize a benchmark result from configuration claims.</div>
+    </section>
+
+    <section class="view" id="view-controls">
+      <div class="card section-card">
+        <h3>Controls</h3><p>Only capabilities authorized by the compatibility resolver and backed by sufficient evidence become controls.</p>
+        <div class="cap-list">
+          <div class="cap"><b>DPI</b><span class="pending">Awaiting capability evidence</span></div>
+          <div class="cap"><b>Polling Rate</b><span class="pending">Awaiting capability evidence</span></div>
+          <div class="cap"><b>Debounce</b><span class="pending">Awaiting capability evidence</span></div>
+          <div class="cap"><b>RGB / Lighting</b><span class="pending">Not presented without evidence</span></div>
+          <div class="cap"><b>Lift Off Distance</b><span class="pending">Not presented without evidence</span></div>
+        </div>
+        <div class="actions"><button class="btn" disabled>Apply changes</button><button class="btn" disabled>Create snapshot</button></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-profiles">
+      <div class="card section-card"><h3>Profiles</h3><p>Profiles will bind to a resolved physical identity, not merely a VID/PID pair.</p>
+        <div class="table-like" style="margin-top:18px"><div class="row head"><span>Profile</span><span>Device</span><span>Status</span></div><div class="row"><span>Default</span><span>Unresolved</span><span>Awaiting device</span></div></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-analyzer">
+      <div class="grid two">
+        <article class="card section-card"><h3>Analyzer</h3><p>Correlates observations across HID, USB topology, CPU/DPC and GPU timing without asserting causality that was not measured.</p><div class="metric muted">No active session</div></article>
+        <article class="card section-card"><h3>Evidence quality</h3><p>Source confidence and missing-data state remain visible instead of being collapsed into a generic error.</p><div class="metric muted">No evidence set</div></article>
+      </div>
+    </section>
+
+    <section class="view" id="view-latency">
+      <div class="card section-card"><h3>Latency Lab</h3><p>Baseline → controlled treatment → measurement → statistical analysis → keep/rollback.</p>
+        <div class="grid two" style="margin-top:16px"><div class="card section-card"><h3>Polling</h3><p>Requires a valid HID capture session.</p><div class="metric muted">Not measurable</div></div><div class="card section-card"><h3>Click</h3><p>Requires a supported physical measurement path.</p><div class="metric muted">Not measurable</div></div></div>
+        <div class="card section-card" style="margin-top:16px"><h3>Timing evidence</h3><p>These three values are intentionally independent. A USB descriptor interval is not an observed host polling result.</p><div class="cap-list"><div class="cap"><b>Configured</b><span id="latency-configured-interval">Not measured</span></div><div class="cap"><b>Device reported</b><span id="latency-descriptor-interval">Not measured</span></div><div class="cap"><b>Observed input median</b><span id="latency-observed-interval">Not measured</span></div></div></div>
+        <div class="actions"><button class="btn primary" disabled>Start baseline</button><button class="btn" disabled>Open experiments</button></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-diagnostics">
+      <div class="card section-card"><h3>Diagnostics</h3><p>Read-only diagnostics are shown from verified platform observations.</p>
+        <div class="cap-list"><div class="cap"><b>HID descriptor</b><span class="pending">Awaiting device</span></div><div class="cap"><b>USB topology</b><span class="pending">Awaiting device</span></div><div class="cap"><b>Receiver correlation</b><span class="pending">Awaiting device</span></div><div class="cap"><b>Raw Input</b><span class="pending">Awaiting device</span></div></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-firmware">
+      <div class="card section-card"><h3>Firmware</h3><div class="notice"><strong>Protected surface.</strong> Firmware operations require exact hardware identity, revision evidence, compatibility validation and an explicitly validated updater path. No firmware operation is enabled by generic HID access.</div>
+        <div class="actions"><button class="btn" disabled>Check firmware</button><button class="btn" disabled>Update firmware</button></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-settings">
+      <div class="grid two">
+        <article class="card section-card"><h3>Safety</h3><p>Mutation remains denied by default. Transactions, snapshots, rollback and recovery are explicit boundaries.</p><div class="state-strip"><span class="state">Writes <strong>DENIED</strong></span><span class="state">Firmware <strong>DISABLED</strong></span></div></article>
+        <article class="card section-card"><h3>Interface</h3><p>Keyboard navigation, reduced motion, responsive layout and semantic landmarks are enabled.</p><div class="metric muted">Accessible shell</div></article>
+      </div>
+    </section>
+
+    <div class="footer-note">Mouse Engine UI · evidence-driven presentation · no device data is fabricated</div>
+  </div>
+</main>
+</div>
+
+<script>
+(function(){
+  const buttons=[...document.querySelectorAll('[data-view]')];
+  const views=[...document.querySelectorAll('.view')];
+  const title=document.getElementById('page-title');
+  const devicePill=document.getElementById('device-pill');
+  const snapshotPill=document.getElementById('snapshot-pill');
+  const devicesSummary=document.getElementById('devices-summary');
+  const vidPidMetric=document.getElementById('device-vidpid-metric');
+  const manufacturerMetric=document.getElementById('device-manufacturer-metric');
+  const containerMetric=document.getElementById('device-container-metric');
+  const instanceMetric=document.getElementById('device-instance-metric');
+  const deviceState=document.getElementById('overview-device-state');
+  const identityState=document.getElementById('evidence-identity-state');
+  const identityMetric=document.getElementById('device-identity-metric');
+  const transportMetric=document.getElementById('device-transport-metric');
+  const buttonsMetric=document.getElementById('device-buttons-metric');
+  const sampleRateMetric=document.getElementById('device-sample-rate-metric');
+  const usbConnectionMetric=document.getElementById('device-usb-connection-metric');
+  const usbEndpointCount=document.getElementById('device-usb-endpoint-count');
+  const usbDescriptorInterval=document.getElementById('device-usb-descriptor-interval');
+  const observedCount=document.getElementById('device-observed-count');
+  const observedMedian=document.getElementById('device-observed-median');
+  const observedP95=document.getElementById('device-observed-p95');
+  const observedJitter=document.getElementById('device-observed-jitter');
+  const latencyConfigured=document.getElementById('latency-configured-interval');
+  const latencyDescriptor=document.getElementById('latency-descriptor-interval');
+  const latencyObserved=document.getElementById('latency-observed-interval');
+
+  const activate=(name)=>{
+    const target=document.getElementById('view-'+name);
+    if(!target)return;
+    buttons.forEach(b=>b.setAttribute('aria-current',String(b.dataset.view===name)));
+    views.forEach(v=>v.classList.toggle('active',v===target));
+    const label=buttons.find(b=>b.dataset.view===name)?.querySelector('.nav-label')?.textContent||'Overview';
+    title.textContent=label;
+    history.replaceState(null,'','#'+name);
+    document.getElementById('main').focus({preventScroll:true});
+  };
+  buttons.forEach(b=>b.addEventListener('click',()=>activate(b.dataset.view)));
+  const initial=location.hash.slice(1);
+  activate(buttons.some(b=>b.dataset.view===initial)?initial:'overview');
+
+  const isValidSnapshot=(snapshot)=>{
+    return snapshot &&
+      snapshot.schemaVersion===2 &&
+      snapshot.host && snapshot.host.online===true &&
+      snapshot.device && typeof snapshot.device.observationAvailable==='boolean' &&
+      typeof snapshot.device.connected==='boolean' &&
+      Number.isInteger(snapshot.device.mouseCount) && snapshot.device.mouseCount>=0 &&
+      Number.isInteger(snapshot.device.identityResolvedCount) && snapshot.device.identityResolvedCount>=0 &&
+      Array.isArray(snapshot.device.identities) &&
+      snapshot.device.identities.every(item=>item && typeof item.resolved==='boolean' &&
+        typeof item.instanceId==='string' &&
+        typeof item.containerId==='string' &&
+        typeof item.manufacturer==='string' &&
+        typeof item.product==='string' &&
+        typeof item.vid==='string' &&
+        typeof item.pid==='string' &&
+        typeof item.transport==='string' &&
+        typeof item.topologyHash==='string' &&
+        item.usbEndpoint && typeof item.usbEndpoint.available==='boolean' &&
+        Number.isInteger(item.usbEndpoint.connectionIndex) && item.usbEndpoint.connectionIndex>=0 &&
+        Number.isInteger(item.usbEndpoint.speedCode) && item.usbEndpoint.speedCode>=0 &&
+        Number.isInteger(item.usbEndpoint.deviceAddress) && item.usbEndpoint.deviceAddress>=0 &&
+        Number.isInteger(item.usbEndpoint.interruptInEndpointCount) && item.usbEndpoint.interruptInEndpointCount>=0 &&
+        item.usbEndpoint.configuredInterval && item.usbEndpoint.configuredInterval.available===false &&
+        item.usbEndpoint.descriptorInterval && typeof item.usbEndpoint.descriptorInterval.available==='boolean' &&
+        Number.isInteger(item.usbEndpoint.descriptorInterval.value) && item.usbEndpoint.descriptorInterval.value>=0 &&
+        item.observedInput && typeof item.observedInput.available==='boolean' &&
+        Number.isInteger(item.observedInput.intervalCount) && item.observedInput.intervalCount>=0 &&
+        typeof item.observedInput.minIntervalMs==='number' && item.observedInput.minIntervalMs>=0 &&
+        typeof item.observedInput.medianIntervalMs==='number' && item.observedInput.medianIntervalMs>=0 &&
+        typeof item.observedInput.p95IntervalMs==='number' && item.observedInput.p95IntervalMs>=0 &&
+        typeof item.observedInput.maxIntervalMs==='number' && item.observedInput.maxIntervalMs>=0 &&
+        typeof item.observedInput.jitterP95MinusMedianMs==='number' && item.observedInput.jitterP95MinusMedianMs>=0 &&
+        typeof item.observedInput.scope==='string') &&
+      snapshot.identity && typeof snapshot.identity.available==='boolean' &&
+      snapshot.identity.transport==='per-device' &&
+      snapshot.latency && typeof snapshot.latency.available==='boolean' &&
+      snapshot.mutation && snapshot.mutation.allowed===false;
+  };
+
+  const applySnapshot=(snapshot)=>{
+    if(!isValidSnapshot(snapshot)) return;
+    const connected=snapshot.device.connected===true;
+    const available=snapshot.device.observationAvailable===true;
+    const count=snapshot.device.mouseCount;
+    if(!available){
+      devicePill.textContent='Device discovery unavailable';
+      devicesSummary.textContent='Windows Raw Input discovery is unavailable.';
+      deviceState.textContent='discovery unavailable';
+      identityState.textContent='Raw Input enumeration unavailable';
+      identityMetric.textContent='Unavailable';
+      vidPidMetric.textContent='Unavailable';
+      manufacturerMetric.textContent='Unavailable';
+      containerMetric.textContent='Unavailable';
+      instanceMetric.textContent='Unavailable';
+      buttonsMetric.textContent='Unavailable';
+      sampleRateMetric.textContent='Unavailable';
+      usbConnectionMetric.textContent='Unavailable';
+      usbEndpointCount.textContent='Unavailable';
+      usbDescriptorInterval.textContent='Unavailable';
+      observedCount.textContent='Unavailable';
+      observedMedian.textContent='Unavailable';
+      observedP95.textContent='Unavailable';
+      observedJitter.textContent='Unavailable';
+      latencyConfigured.textContent='Not measured';
+      latencyDescriptor.textContent='Not measured';
+      latencyObserved.textContent='Not measured';
+    }else{
+      devicePill.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'No mouse observed';
+      devicesSummary.textContent=connected ? `${count} mouse${count===1?'':'s'} observed through Windows Raw Input. Identity is resolved independently through SetupAPI.` : 'Windows Raw Input is available, but no mouse is currently observed.';
+      deviceState.textContent=connected ? `${count} mouse${count===1?'':'s'} observed` : 'no mouse observed';
+      identityState.textContent=connected ? `Raw Input observed ${count} mouse${count===1?'':'s'}; physical identity pending` : 'No mouse observation';
+      identityMetric.textContent=connected ? `${snapshot.device.identityResolvedCount} of ${count} identity records resolved` : 'No mouse observed';
+      buttonsMetric.textContent=snapshot.device.detailAvailable ? `${snapshot.device.maxObservedButtons} observed` : 'Detail unavailable';
+      sampleRateMetric.textContent=snapshot.device.detailAvailable ? `${snapshot.device.maxObservedSampleRate} data points/s` : 'Detail unavailable';
+      const resolved=snapshot.device.identities.find(item=>item && item.resolved===true);
+      if(resolved){
+        const vid=resolved.vid||'—';
+        const pid=resolved.pid||'—';
+        vidPidMetric.textContent=`${vid} / ${pid}`;
+        manufacturerMetric.textContent=[resolved.manufacturer,resolved.product].filter(Boolean).join(' / ')||'Not reported';
+        containerMetric.textContent=resolved.containerId||'Not reported';
+        instanceMetric.textContent=resolved.instanceId||'Not reported';
+        identityState.textContent='SetupAPI identity resolved; transport evidence classified conservatively';
+        const transports=[...new Set(snapshot.device.identities.filter(item=>item && item.resolved).map(item=>item.transport))];
+        transportMetric.textContent=transports.length===0
+          ? 'Unknown — insufficient direct bus evidence'
+          : transports.length===1
+            ? transports[0]+' — direct ancestry evidence'
+            : 'Mixed — per-device direct ancestry evidence';
+
+        const usb=resolved.usbEndpoint;
+        if(usb && usb.available){
+          usbConnectionMetric.textContent=`Port ${usb.connectionIndex} · address ${usb.deviceAddress} · speed code ${usb.speedCode}`;
+          usbEndpointCount.textContent=`${usb.interruptInEndpointCount} interrupt IN endpoint${usb.interruptInEndpointCount===1?'':'s'}`;
+          usbDescriptorInterval.textContent=usb.descriptorInterval.available
+            ? `bInterval ${usb.descriptorInterval.value} · endpoint 0x${Number(usb.descriptorInterval.endpointAddress).toString(16).padStart(2,'0')}`
+            : 'Descriptor interval unavailable';
+          latencyConfigured.textContent='Not exposed by this read-only path';
+          latencyDescriptor.textContent=usb.descriptorInterval.available
+            ? `bInterval ${usb.descriptorInterval.value} (device descriptor evidence)`
+            : 'Not available';
+          latencyObserved.textContent='Not measured';
+        }else{
+          usbConnectionMetric.textContent='USB endpoint evidence unavailable';
+          usbEndpointCount.textContent='Not available';
+          usbDescriptorInterval.textContent='Not available';
+        }
+
+        const observed=resolved.observedInput;
+        if(observed && observed.available && observed.intervalCount>0){
+          observedCount.textContent=`${observed.intervalCount} inter-arrival intervals`;
+          observedMedian.textContent=`${observed.medianIntervalMs.toFixed(3)} ms`;
+          observedP95.textContent=`${observed.p95IntervalMs.toFixed(3)} ms`;
+          observedJitter.textContent=`${observed.jitterP95MinusMedianMs.toFixed(3)} ms`;
+          latencyConfigured.textContent='Not exposed by this read-only path';
+          latencyObserved.textContent=`${observed.medianIntervalMs.toFixed(3)} ms median input inter-arrival`;
+        }else{
+          observedCount.textContent='Not measured';
+          observedMedian.textContent='Not measured';
+          observedP95.textContent='Not measured';
+          observedJitter.textContent='Not measured';
+          latencyConfigured.textContent='Not measured';
+          latencyObserved.textContent='Not measured';
+        }
+        latencyDescriptor.textContent=usb && usb.available && usb.descriptorInterval.available
+          ? `bInterval ${usb.descriptorInterval.value} (device descriptor evidence)`
+          : 'Not available';
+      }else{
+        vidPidMetric.textContent='Identity pending';
+        usbConnectionMetric.textContent='Identity pending';
+        usbEndpointCount.textContent='Identity pending';
+        usbDescriptorInterval.textContent='Identity pending';
+        observedCount.textContent='Not measured';
+        observedMedian.textContent='Not measured';
+        observedP95.textContent='Not measured';
+        observedJitter.textContent='Not measured';
+        latencyConfigured.textContent='Not measured';
+        latencyDescriptor.textContent='Not measured';
+        latencyObserved.textContent='Not measured';
+        manufacturerMetric.textContent='Identity pending';
+        containerMetric.textContent='Identity pending';
+        instanceMetric.textContent='Identity pending';
+      }
+    }
+    if(!connected) {
+      transportMetric.textContent='No device topology evidence';
+      usbConnectionMetric.textContent='No mouse observed';
+      usbEndpointCount.textContent='No mouse observed';
+      usbDescriptorInterval.textContent='No mouse observed';
+      observedCount.textContent='Not measured';
+      observedMedian.textContent='Not measured';
+      observedP95.textContent='Not measured';
+      observedJitter.textContent='Not measured';
+      latencyConfigured.textContent='Not measured';
+      latencyDescriptor.textContent='Not measured';
+      latencyObserved.textContent='Not measured';
+    }
+    snapshotPill.textContent='Host snapshot: received';
+  };
+
+  // Host -> UI is read-only. The page never sends commands back to the native host.
+  if(window.chrome && window.chrome.webview && typeof window.chrome.webview.addEventListener==='function'){
+    window.chrome.webview.addEventListener('message',(event)=>{
+      try{
+        const snapshot=typeof event.data==='string' ? JSON.parse(event.data) : event.data;
+        applySnapshot(snapshot);
+      }catch(_error){
+        // Preserve the honest empty state when the host message is malformed.
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

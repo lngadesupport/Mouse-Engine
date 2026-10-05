@@ -1,0 +1,10 @@
+{
+  "product": "Mouse Engine",
+  "version": "1.0.0-rc.3",
+  "architecture": "x64",
+  "mutationDefault": "denied",
+  "installer": "MouseEngine-1.0.0-rc.3-win64-setup.exe",
+  "uninstaller": "Uninstall Mouse Engine",
+  "userData": "%LOCALAPPDATA%\\Mouse Engine",
+  "installRoot": "%LOCALAPPDATA%\\Programs\\Mouse Engine"
+}

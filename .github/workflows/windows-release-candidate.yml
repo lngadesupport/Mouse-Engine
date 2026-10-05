@@ -1,8 +1,8 @@
 name: Windows Release Candidate
 
 on:
-  workflow_dispatch:
   push:
+    branches: [feature/phase38-installer-real]
     tags:
       - 'v1.0.0-rc.*'
 
@@ -24,6 +24,11 @@ jobs:
         with:
           arch: x64
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+
       - name: Download pinned WebView2 SDK
         shell: pwsh
         run: |
@@ -42,7 +47,7 @@ jobs:
       - name: Configure
         shell: pwsh
         run: |
-          cmake -S . -B build-release -G 'Visual Studio 17 2022' -A x64 -DWEBVIEW2_SDK_DIR="$env:WEBVIEW2_SDK_DIR"
+          cmake -S . -B build-release -G 'Visual Studio 18 2026' -A x64 -DWEBVIEW2_SDK_DIR="$env:WEBVIEW2_SDK_DIR"
 
       - name: Build
         shell: pwsh
@@ -54,17 +59,57 @@ jobs:
         run: |
           ctest --test-dir build-release -C Release --output-on-failure
 
+      - name: UI contract test
+        shell: pwsh
+        run: |
+          node ui/ui_contract_test.mjs
+
+      - name: WebView2 bridge contract test
+        shell: pwsh
+        run: |
+          node ui/ui_bridge_contract_test.mjs
+
       - name: Host self-test
         shell: pwsh
         run: |
-          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --self-test
-          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-environment
-          .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --print-storage
+          ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --self-test
+          ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-environment
+          ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-storage
+          $snapshot = ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --print-snapshot | ConvertFrom-Json
+          if ($snapshot.schemaVersion -ne 2) { throw 'Snapshot schema version mismatch.' }
+          if ($snapshot.host.online -ne $true) { throw 'Host snapshot is not online.' }
+          if ($snapshot.device.observationAvailable -isnot [bool]) { throw 'Device observation availability must be boolean.' }
+          if ($snapshot.device.connected -isnot [bool]) { throw 'Device connection state must be boolean.' }
+          if ($snapshot.device.mouseCount -isnot [int] -or $snapshot.device.mouseCount -lt 0) { throw 'Mouse count must be a non-negative integer.' }
+          if ($snapshot.device.detailAvailable -isnot [bool]) { throw 'Device detail availability must be boolean.' }
+          if ($snapshot.device.maxObservedButtons -isnot [int] -or $snapshot.device.maxObservedButtons -lt 0) { throw 'Observed button count must be a non-negative integer.' }
+          if ($snapshot.device.maxObservedSampleRate -isnot [int] -or $snapshot.device.maxObservedSampleRate -lt 0) { throw 'Observed sample rate must be a non-negative integer.' }
+          if ($snapshot.device.identityResolvedCount -isnot [int] -or $snapshot.device.identityResolvedCount -lt 0) { throw 'Resolved identity count must be a non-negative integer.' }
+          if ($snapshot.device.identities -isnot [array]) { throw 'Identity observations must be an array.' }
+          if ($snapshot.identity.available -isnot [bool]) { throw 'Identity availability must be boolean.' }
+          if ($snapshot.identity.transport -ne 'per-device') { throw 'Transport must remain per-device; no global transport claim is permitted.' }
+          foreach ($identity in $snapshot.device.identities) {
+            if ($identity.resolved -and $identity.transport -notin @('Usb', 'Bluetooth', 'Unknown')) { throw 'Unexpected direct transport classification.' }
+            if ($identity.resolved -and [string]::IsNullOrWhiteSpace($identity.topologyHash)) { throw 'Resolved identity must carry a topology evidence hash.' }
+            if ($null -eq $identity.usbEndpoint) { throw 'Resolved identity must carry USB endpoint evidence state.' }
+            if ($identity.usbEndpoint.connectionIndex -isnot [int] -or $identity.usbEndpoint.connectionIndex -lt 0) { throw 'USB connection index must be a non-negative integer.' }
+            if ($identity.usbEndpoint.speedCode -isnot [int] -or $identity.usbEndpoint.speedCode -lt 0) { throw 'USB speed code must be a non-negative integer.' }
+            if ($identity.usbEndpoint.deviceAddress -isnot [int] -or $identity.usbEndpoint.deviceAddress -lt 0) { throw 'USB device address must be a non-negative integer.' }
+            if ($identity.usbEndpoint.interruptInEndpointCount -isnot [int] -or $identity.usbEndpoint.interruptInEndpointCount -lt 0) { throw 'USB interrupt IN endpoint count must be a non-negative integer.' }
+            if ($identity.usbEndpoint.configuredInterval.available -ne $false) { throw 'Configured interval must remain unavailable until a distinct host configuration evidence source exists.' }
+            if ($identity.usbEndpoint.descriptorInterval.available -and ($identity.usbEndpoint.descriptorInterval.value -lt 0 -or $identity.usbEndpoint.descriptorInterval.value -gt 255)) { throw 'USB descriptor bInterval must be an unsigned byte.' }
+            if ($null -eq $identity.observedInput) { throw 'Resolved identity must carry observed input timing state.' }
+            if ($identity.observedInput.intervalCount -lt 0) { throw 'Observed interval count must be non-negative.' }
+            if ($identity.observedInput.minIntervalMs -lt 0 -or $identity.observedInput.medianIntervalMs -lt 0 -or $identity.observedInput.p95IntervalMs -lt 0 -or $identity.observedInput.maxIntervalMs -lt 0) { throw 'Observed timing values must be non-negative.' }
+            if ([string]::IsNullOrWhiteSpace($identity.observedInput.scope)) { throw 'Observed timing scope must be explicit.' }
+          }
+          if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
+          Write-Output 'host_snapshot_contract: PASS'
 
       - name: Validate Windows host binary
         shell: pwsh
         run: |
-          $exe = Resolve-Path '.\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe'
+          $exe = Resolve-Path './build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe'
           $dump = & dumpbin.exe /headers $exe 2>&1
           if ($LASTEXITCODE -ne 0) { throw 'dumpbin failed for host executable.' }
           if (-not ($dump | Select-String '8664 machine \(x64\)')) { throw 'Host executable is not a validated x64 PE binary.' }
@@ -73,21 +118,28 @@ jobs:
       - name: Package Windows distribution
         shell: pwsh
         run: |
-          python tools/package_windows.py --source . --host-executable .\build-release\src\MouseEngine.Host.Windows\Release\MouseEngine.Host.Windows.exe --output .\MouseEngine-1.0.0-rc.3-win64.zip
+          python tools/package_windows.py --source . --host-executable ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --output ./MouseEngine-1.0.0-rc.3-win64.zip
 
       - name: Verify package archive
         shell: pwsh
         run: |
           python tools/package_windows_tests.py
           python tools/release_gate.py
-          Expand-Archive -LiteralPath .\MouseEngine-1.0.0-rc.3-win64.zip -DestinationPath .\package-smoke -Force
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\windows_installer_smoke.ps1 -DistributionRoot '.\package-smoke\Mouse Engine'
-          Get-FileHash .\MouseEngine-1.0.0-rc.3-win64.zip -Algorithm SHA256 | Format-List
+          Expand-Archive -LiteralPath ./MouseEngine-1.0.0-rc.3-win64.zip -DestinationPath ./package-smoke -Force
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/windows_installer_smoke.ps1 -DistributionRoot './package-smoke/Mouse Engine'
+          Get-FileHash ./MouseEngine-1.0.0-rc.3-win64.zip -Algorithm SHA256 | Format-List
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build_windows_installer.ps1
 
       - name: Upload Windows distribution
         uses: actions/upload-artifact@v4
         with:
           name: MouseEngine-1.0.0-rc.3-win64
-          path: MouseEngine-1.0.0-rc.3-win64.zip
+          path: |
+            MouseEngine-1.0.0-rc.3-win64.zip
+            dist/MouseEngine-1.0.0-rc.3-win64-setup.exe
           if-no-files-found: error
           retention-days: 30

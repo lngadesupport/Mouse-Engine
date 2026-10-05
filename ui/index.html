@@ -212,6 +212,16 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
           <div class="cap"><b>Longest run Δ</b><span id="session-delta-longest">—</span></div>
         </div>
         <div class="notice" id="session-comparison-method" style="margin-top:16px">Select two sessions with observed timing samples.</div>
+        <div class="card section-card" style="margin-top:16px">
+          <h3>Persisted CDF comparison</h3>
+          <p>Both distributions are evaluated at common observed-time checkpoints. Different bucket widths are interpolated conservatively; this is a descriptive distribution comparison, not a hardware ranking.</p>
+          <div id="session-cdf-comparison" class="cap-list" style="margin-top:14px">
+            <div class="cap"><b>CDF</b><span>—</span></div>
+          </div>
+        </div>
+        <div class="notice" id="session-replay-state" style="margin-top:16px">
+          Replay is metadata-only for persisted sessions. Raw packet samples are not stored in the current session schema, so Mouse Engine will not synthesize a movement replay.
+        </div>
       </article>
     </section>
 
@@ -297,6 +307,8 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
   const sessionDeltaRuns=document.getElementById('session-delta-runs');
   const sessionDeltaLongest=document.getElementById('session-delta-longest');
   const sessionComparisonMethod=document.getElementById('session-comparison-method');
+  const sessionCdfComparison=document.getElementById('session-cdf-comparison');
+  const sessionReplayState=document.getElementById('session-replay-state');
 
   const activate=(name)=>{
     const target=document.getElementById('view-'+name);
@@ -382,6 +394,14 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         Number.isInteger(item.idleGapCount50ms) && item.idleGapCount50ms>=0 &&
         Number.isInteger(item.activeRunCount) && item.activeRunCount>=0 &&
         Number.isInteger(item.longestActiveRunPackets) && item.longestActiveRunPackets>=0 &&
+        item.distribution && Number.isInteger(item.distribution.sampleCount) && item.distribution.sampleCount>=0 &&
+        typeof item.distribution.meanIntervalMs==='number' && item.distribution.meanIntervalMs>=0 &&
+        typeof item.distribution.bucketWidthMs==='number' && item.distribution.bucketWidthMs>=0 &&
+        Array.isArray(item.distribution.buckets) &&
+        item.distribution.buckets.every(bucket=>bucket && typeof bucket.lowerBoundMs==='number' && bucket.lowerBoundMs>=0 &&
+          typeof bucket.upperBoundMs==='number' && bucket.upperBoundMs>=bucket.lowerBoundMs &&
+          Number.isInteger(bucket.count) && bucket.count>=0 &&
+          typeof bucket.cumulativeFraction==='number' && bucket.cumulativeFraction>=0 && bucket.cumulativeFraction<=1) &&
         typeof item.complete==='boolean') &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
       snapshot.identity.transport==='per-device' &&
@@ -618,12 +638,52 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
       renderSessionComparison(items);
     };
 
+    const cdfAt=(distribution,x)=>{
+      if(!distribution || !Array.isArray(distribution.buckets) || !distribution.buckets.length) return null;
+      const buckets=distribution.buckets;
+      if(x < buckets[0].lowerBoundMs) return 0;
+      for(const bucket of buckets){
+        if(x <= bucket.upperBoundMs){
+          const span=bucket.upperBoundMs-bucket.lowerBoundMs;
+          const previousIndex=buckets.indexOf(bucket)-1;
+          const previous=previousIndex>=0?buckets[previousIndex].cumulativeFraction:0;
+          if(span<=0) return bucket.cumulativeFraction;
+          const fraction=Math.max(0,Math.min(1,(x-bucket.lowerBoundMs)/span));
+          return previous+(bucket.cumulativeFraction-previous)*fraction;
+        }
+      }
+      return 1;
+    };
+    const renderCdfComparison=(a,b)=>{
+      sessionCdfComparison.innerHTML='';
+      if(!a || !b || !a.distribution || !b.distribution || !a.distribution.buckets.length || !b.distribution.buckets.length){
+        sessionCdfComparison.innerHTML='<div class="cap"><b>CDF</b><span>Insufficient persisted distribution data</span></div>';
+        return;
+      }
+      const min=Math.max(a.distribution.buckets[0].lowerBoundMs,b.distribution.buckets[0].lowerBoundMs);
+      const max=Math.min(a.distribution.buckets.at(-1).upperBoundMs,b.distribution.buckets.at(-1).upperBoundMs);
+      if(!(max>min)){
+        sessionCdfComparison.innerHTML='<div class="cap"><b>CDF</b><span>No overlapping observed interval range</span></div>';
+        return;
+      }
+      [0.25,0.50,0.75,0.95].forEach(q=>{
+        const x=min+(max-min)*q;
+        const av=cdfAt(a.distribution,x);
+        const bv=cdfAt(b.distribution,x);
+        const row=document.createElement('div');
+        row.className='cap';
+        row.innerHTML='<b>'+Math.round(q*100)+'th-range checkpoint · '+x.toFixed(3)+' ms</b><span>A '+(av*100).toFixed(1)+'% · B '+(bv*100).toFixed(1)+'% · Δ '+((bv-av)*100).toFixed(1)+' pp</span>';
+        sessionCdfComparison.appendChild(row);
+      });
+    };
+
     const renderSessionComparison=(items)=>{
       const a=items.find(x=>x.id===sessionCompareA.value);
       const b=items.find(x=>x.id===sessionCompareB.value);
       if(!a || !b || a.id===b.id || a.intervalCount===0 || b.intervalCount===0){
         [sessionDeltaMedian,sessionDeltaP95,sessionDeltaJitter,sessionDeltaIdle,sessionDeltaRuns,sessionDeltaLongest].forEach(el=>el.textContent='—');
         sessionComparisonMethod.textContent='Select two distinct sessions with observed timing samples.';
+        renderCdfComparison(a,b);
         return;
       }
       sessionDeltaMedian.textContent=(b.medianIntervalMs-a.medianIntervalMs).toFixed(3)+' ms';
@@ -633,6 +693,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
       sessionDeltaRuns.textContent=String(b.activeRunCount-a.activeRunCount);
       sessionDeltaLongest.textContent=String(b.longestActiveRunPackets-a.longestActiveRunPackets)+' packets';
       sessionComparisonMethod.textContent='Paired session summary; descriptive deltas only; no winner inference.';
+      renderCdfComparison(a,b);
     };
     sessionCompareA.addEventListener('change',()=>renderSessionComparison(lastSessions));
     sessionCompareB.addEventListener('change',()=>renderSessionComparison(lastSessions));

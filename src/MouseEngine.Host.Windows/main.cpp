@@ -524,6 +524,14 @@ public:
         return it->second.snapshot(summary);
     }
 
+    bool any_available() const {
+        mouse_engine::windows::InputTimingSummary summary{};
+        for (const auto& item : per_device_) {
+            if (item.second.snapshot(summary)) return true;
+        }
+        return false;
+    }
+
     void clear() {
         per_device_.clear();
         frequency_ticks_ = 0;
@@ -644,8 +652,7 @@ std::string snapshot_json() {
             << ",\"descriptorInterval\":{\"available\":" << bool_json(identity.usb_endpoint.descriptor_interval_available)
             << ",\"value\":" << static_cast<unsigned>(identity.usb_endpoint.descriptor_interval)
             << ",\"endpointAddress\":" << static_cast<unsigned>(identity.usb_endpoint.descriptor_endpoint_address)
-            << "}"
-            << ",\"observedInterval\":{\"available\":false}}"
+            << "}}"
             << ",\"observedInput\":{\"available\":"
             << bool_json(identity.observed_input.available)
             << ",\"intervalCount\":" << identity.observed_input.summary.interval_count
@@ -659,7 +666,8 @@ std::string snapshot_json() {
     out << "],\n"
         << "  \"identity\": { \"available\": " << bool_json(!mouse.identities.empty())
         << ", \"transport\": \"per-device\" },\n"
-        << "  \"latency\": { \"available\": false, \"configuredInterval\": { \"available\": false }, \"descriptorInterval\": { \"available\": false }, \"observedInterval\": { \"available\": false } },\n"
+        << "  \"latency\": { \"available\": " << bool_json(raw_input_timing().any_available())
+        << ", \"configuredInterval\": { \"available\": false }, \"descriptorInterval\": { \"available\": false }, \"observedInterval\": { \"available\": " << bool_json(raw_input_timing().any_available()) << " } },\n"
         << "  \"mutation\": { \"allowed\": false }\n"
         << "}";
     return out.str();

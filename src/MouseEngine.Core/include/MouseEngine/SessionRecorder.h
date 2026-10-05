@@ -27,6 +27,8 @@ public:
 
     bool is_recording() const noexcept { return recording_; }
     const std::string& session_id() const noexcept { return session_id_; }
+    const std::string& device_id() const noexcept { return device_id_; }
+    std::size_t packet_count() const noexcept { return packets_.size(); }
 
     bool record(const observation::TimedPacket& packet) {
         if (!recording_) return false;

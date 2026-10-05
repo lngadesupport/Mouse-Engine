@@ -6,6 +6,7 @@
 #include "MouseEngine/ObservationSession.h"
 #include "MouseEngine/SessionCapture.h"
 #include "MouseEngine/SessionStore.h"
+#include "MouseEngine/SessionTraceStore.h"
 #include <algorithm>
 #include <cstdint>
 #include <cwctype>
@@ -422,6 +423,8 @@ struct ActiveSessionEvidence {
     std::string started_at_utc;
     std::size_t packet_count{0};
     double duration_ms{0.0};
+    bool trace_available{false};
+    std::size_t trace_packet_count{0};
     mouse_engine::model::TimingMeasurement timing{};
     mouse_engine::model::TimingDistribution distribution{};
 };
@@ -704,6 +707,8 @@ public:
             out.session.device_id = it->second.session->device_id();
             out.session.started_at_utc = it->second.session->started_at_utc();
             out.session.packet_count = it->second.session->packet_count();
+            out.session.trace_available = it->second.session->trace_enabled();
+            out.session.trace_packet_count = it->second.session->trace_packet_count();
             const auto live_session = it->second.session->snapshot({});
             out.session.timing = live_session.all.timing;
             out.session.distribution = live_session.all.distribution;
@@ -962,6 +967,8 @@ std::string session_history_json() {
             << ",\"idleGapCount50ms\":" << session.idle_gap_count_50ms
             << ",\"activeRunCount\":" << session.active_run_count
             << ",\"longestActiveRunPackets\":" << session.longest_active_run_packets
+            << ",\"traceAvailable\":" << bool_json(session.trace_available)
+            << ",\"tracePacketCount\":" << session.trace_packet_count
             << ",\"distribution\":{\"sampleCount\":" << session.distribution_sample_count
             << ",\"meanIntervalMs\":" << session.distribution_mean_interval_ms
             << ",\"bucketWidthMs\":" << session.distribution_bucket_width_ms
@@ -985,6 +992,37 @@ std::string session_history_json() {
                 << "\",\"stream\":\"" << json_escape(anomaly.stream) << "\"}";
         }
         out << "],\"complete\":" << bool_json(session.complete) << "}";
+    }
+    out << "]}";
+    return out.str();
+}
+
+std::string session_trace_json(const std::string& session_id) {
+    const auto paths = mouse_engine::workspace::WorkspacePaths::from_root(workspace_root());
+    mouse_engine::session::SessionTraceStore store(paths);
+    mouse_engine::session::SessionTrace trace;
+    std::string error;
+    const bool available = store.load(session_id, &trace, &error);
+    std::ostringstream out;
+    out << "{\"type\":\"sessionTrace\",\"sessionId\":\"" << json_escape(session_id)
+        << "\",\"available\":" << bool_json(available);
+    if (!available) {
+        out << ",\"error\":\"" << json_escape(error) << "\"}";
+        return out.str();
+    }
+    out << ",\"schemaVersion\":" << trace.schema_version
+        << ",\"deviceId\":\"" << json_escape(trace.device_id)
+        << "\",\"truncated\":" << bool_json(trace.truncated)
+        << ",\"packets\":[";
+    for (std::size_t i = 0; i < trace.packets.size(); ++i) {
+        if (i != 0) out << ",";
+        const auto& packet = trace.packets[i];
+        out << "{\"timestampMs\":" << packet.timestamp_ms
+            << ",\"classes\":" << packet.classes
+            << ",\"dx\":" << packet.dx
+            << ",\"dy\":" << packet.dy
+            << ",\"buttons\":" << packet.buttons
+            << ",\"wheel\":" << packet.wheel << "}";
     }
     out << "]}";
     return out.str();
@@ -1045,6 +1083,8 @@ std::string snapshot_json() {
             << "\",\"startedAtUtc\":\"" << json_escape(identity.observed_input.session.started_at_utc)
             << "\",\"packetCount\":" << identity.observed_input.session.packet_count
             << ",\"durationMs\":" << identity.observed_input.session.duration_ms
+            << ",\"traceAvailable\":" << bool_json(identity.observed_input.session.trace_available)
+            << ",\"tracePacketCount\":" << identity.observed_input.session.trace_packet_count
             << ",\"timing\":{\"intervalCount\":" << identity.observed_input.session.timing.interval_count
             << ",\"minIntervalMs\":" << identity.observed_input.session.timing.min_interval_ms
             << ",\"medianIntervalMs\":" << identity.observed_input.session.timing.median_interval_ms

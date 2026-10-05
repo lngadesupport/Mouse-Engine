@@ -38,7 +38,7 @@ const hostRequired = [
   'medianIntervalMs',
   'p95IntervalMs',
   'jitterP95MinusMedianMs',
-  'observedInput', 'RawInputClassification', 'raw_mouse_has_movement', 'raw_mouse_has_button_event', 'raw_mouse_has_wheel_event', 'streams', 'packetCount', 'timing', 'movement', 'button', 'wheel',
+  'observedInput', 'RawInputClassification', 'raw_mouse_has_movement', 'raw_mouse_has_button_event', 'raw_mouse_has_wheel_event', 'streams', 'packetCount', 'timing', 'idleGapCount50ms', 'longestIdleGapMs', 'movement', 'button', 'wheel',
   'put_IsWebMessageEnabled(TRUE)',
   'PostWebMessageAsJson(snapshot_json().c_str())',
   'add_NavigationCompleted',

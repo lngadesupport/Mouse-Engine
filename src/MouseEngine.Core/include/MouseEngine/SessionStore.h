@@ -40,6 +40,8 @@ struct SessionSummary {
     double distribution_bucket_width_ms{0.0};
     std::vector<model::DistributionBucket> distribution_buckets;
     std::vector<SessionAnomalySummary> anomalies;
+    bool trace_available{false};
+    std::size_t trace_packet_count{0};
     bool complete{false};
 };
 
@@ -215,6 +217,19 @@ private:
                     anomaly.message = (*it)[4].str();
                     anomaly.stream = (*it)[5].str();
                     summary->anomalies.push_back(std::move(anomaly));
+                }
+            }
+        }
+
+        const auto trace_path = paths_.sessions / (sanitize_id(summary->id) + ".trace.jsonl");
+        std::ifstream trace_input(trace_path, std::ios::binary);
+        if (trace_input) {
+            std::string trace_header;
+            if (std::getline(trace_input, trace_header)) {
+                std::size_t trace_count = 0;
+                if (size_field(trace_header, "packetCount", &trace_count)) {
+                    summary->trace_available = true;
+                    summary->trace_packet_count = trace_count;
                 }
             }
         }

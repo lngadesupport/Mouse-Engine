@@ -30,7 +30,7 @@ public:
     bool save(const SessionTrace& trace, std::string* error = nullptr) const {
         if (trace.schema_version != SessionTrace::kSchemaVersion ||
             trace.session_id.empty() || trace.device_id.empty() ||
-            trace.packets.empty() || trace.packets.size() > SessionTrace::kMaxPackets) {
+            trace.packets.size() > SessionTrace::kMaxPackets) {
             return fail(error, "invalid session trace");
         }
 

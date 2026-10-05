@@ -222,6 +222,13 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         <div class="notice" id="session-replay-state" style="margin-top:16px">
           Replay is metadata-only for persisted sessions. Raw packet samples are not stored in the current session schema, so Mouse Engine will not synthesize a movement replay.
         </div>
+        <div class="card section-card" style="margin-top:16px">
+          <h3>Anomaly Ledger</h3>
+          <p>Persisted anomaly order is shown as a sequence. The current schema does not attach a timestamp to each anomaly, so this is deliberately not presented as a time-scaled timeline.</p>
+          <div class="table-like" id="session-anomaly-ledger" style="margin-top:14px">
+            <div class="row"><span>No anomaly records</span><span>Sequence unavailable</span><span>—</span></div>
+          </div>
+        </div>
       </article>
     </section>
 
@@ -309,6 +316,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
   const sessionComparisonMethod=document.getElementById('session-comparison-method');
   const sessionCdfComparison=document.getElementById('session-cdf-comparison');
   const sessionReplayState=document.getElementById('session-replay-state');
+  const sessionAnomalyLedger=document.getElementById('session-anomaly-ledger');
 
   const activate=(name)=>{
     const target=document.getElementById('view-'+name);
@@ -402,6 +410,9 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
           typeof bucket.upperBoundMs==='number' && bucket.upperBoundMs>=bucket.lowerBoundMs &&
           Number.isInteger(bucket.count) && bucket.count>=0 &&
           typeof bucket.cumulativeFraction==='number' && bucket.cumulativeFraction>=0 && bucket.cumulativeFraction<=1) &&
+        item.anomalies && Array.isArray(item.anomalies) &&
+        item.anomalies.every(anomaly=>anomaly && typeof anomaly.id==='string' && typeof anomaly.severity==='string' &&
+          typeof anomaly.type==='string' && typeof anomaly.message==='string' && typeof anomaly.stream==='string') &&
         typeof item.complete==='boolean') &&
       snapshot.identity && typeof snapshot.identity.available==='boolean' &&
       snapshot.identity.transport==='per-device' &&
@@ -599,6 +610,27 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         sessionDuration.textContent='—';
       }
     }
+    const renderAnomalyLedger=(session)=>{
+      sessionAnomalyLedger.innerHTML='';
+      const anomalies=session?.anomalies||[];
+      if(!anomalies.length){
+        sessionAnomalyLedger.innerHTML='<div class="row"><span>No anomaly records</span><span>None persisted</span><span>—</span></div>';
+        return;
+      }
+      anomalies.forEach((anomaly,index)=>{
+        const row=document.createElement('div');
+        row.className='row';
+        const seq=document.createElement('span');
+        seq.textContent='#'+(index+1)+' · '+anomaly.severity;
+        const description=document.createElement('span');
+        description.textContent=anomaly.type+' · '+anomaly.message;
+        const stream=document.createElement('span');
+        stream.textContent=anomaly.stream||'unspecified';
+        row.append(seq,description,stream);
+        sessionAnomalyLedger.appendChild(row);
+      });
+    };
+
     const renderSessionHistory=(sessions)=>{
       const items=sessions||[];
       sessionHistoryList.innerHTML='';
@@ -684,6 +716,7 @@ h1{margin:4px 0 0;font-size:30px;line-height:1.15;letter-spacing:-.03em}
         [sessionDeltaMedian,sessionDeltaP95,sessionDeltaJitter,sessionDeltaIdle,sessionDeltaRuns,sessionDeltaLongest].forEach(el=>el.textContent='—');
         sessionComparisonMethod.textContent='Select two distinct sessions with observed timing samples.';
         renderCdfComparison(a,b);
+      renderAnomalyLedger(a);
         return;
       }
       sessionDeltaMedian.textContent=(b.medianIntervalMs-a.medianIntervalMs).toFixed(3)+' ms';

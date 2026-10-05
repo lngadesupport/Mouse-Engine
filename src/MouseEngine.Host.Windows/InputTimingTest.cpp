@@ -31,6 +31,18 @@ int main() {
     assert(summary.max_interval_ms >= 19.999);
     assert(summary.p95_interval_ms >= 10.0);
 
+    InputTimingAccumulator bounded(3);
+    bounded.record(1000, 100000);
+    bounded.record(2000, 100000);
+    bounded.record(4000, 100000);
+    bounded.record(7000, 100000);
+    bounded.record(6000, 100000); // Non-monotonic sample must not create a negative interval.
+    bounded.record(10000, 100000);
+    assert(bounded.snapshot(summary));
+    assert(summary.interval_count == 3);
+    assert(summary.min_interval_ms >= 19.999);
+    assert(summary.max_interval_ms >= 39.999);
+
     InputTimingAccumulator empty(4);
     assert(!empty.snapshot(summary));
 

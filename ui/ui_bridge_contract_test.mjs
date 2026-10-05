@@ -81,3 +81,10 @@ console.log('WebView2 bridge contract PASS');
 assert(source.includes('timing-distribution-chart'), 'Timing distribution UI must be present');
 assert(source.includes('cumulativeFraction'), 'Timing distribution must expose CDF evidence');
 assert(source.includes('WM_INPUT inter-arrival'), 'Timing distribution scope must remain explicit');
+
+assert(source.includes('Session Explorer'), 'session explorer surface');
+assert(source.includes('session-history-list'), 'session history list');
+assert(source.includes('session-compare-a'), 'session comparison A');
+assert(source.includes('session-compare-b'), 'session comparison B');
+assert(source.includes('Paired session summary; descriptive deltas only; no winner inference.'), 'comparison methodology');
+assert(source.includes('snapshot.sessions.items'), 'session history snapshot contract');

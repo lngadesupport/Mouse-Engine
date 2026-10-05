@@ -31,6 +31,8 @@
 
 namespace {
 
+constexpr UINT_PTR kSnapshotTimerId = 1;
+
 std::filesystem::path executable_directory() { wchar_t buffer[MAX_PATH]{}; DWORD n=GetModuleFileNameW(nullptr,buffer,MAX_PATH); return n ? std::filesystem::path(buffer).parent_path() : std::filesystem::path{}; }
 std::filesystem::path ui_entrypoint() { return executable_directory() / L"ui" / L"index.html"; }
 void show_native_fallback(HWND hwnd, const wchar_t* reason) { SetWindowTextW(hwnd,L"Mouse Engine — UI fallback"); MessageBoxW(hwnd,reason,L"Mouse Engine",MB_OK|MB_ICONINFORMATION); }
@@ -621,7 +623,7 @@ std::string snapshot_json() {
     }
     std::ostringstream out;
     out << "{\n"
-        << "  \"schemaVersion\": 1,\n"
+        << "  \"schemaVersion\": 2,\n"
         << "  \"host\": { \"online\": true, \"platform\": \"windows\", \"architecture\": \"x64\" },\n"
         << "  \"device\": { \"observationAvailable\": " << bool_json(mouse.available)
         << ", \"connected\": " << bool_json(mouse.available && mouse.mouse_count > 0)
@@ -849,7 +851,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
         webview = new WebViewHost();
         register_mouse_device_notifications(hwnd);
-        SetTimer(hwnd, 1, 250, nullptr);
+        SetTimer(hwnd, kSnapshotTimerId, 250, nullptr);
         if (!webview->initialize(hwnd, storage_root() / L"WebView2")) {
             delete webview; webview = nullptr;
             show_native_fallback(hwnd,L"WebView2 could not be initialized. Install the Microsoft Edge WebView2 Runtime, then restart Mouse Engine.");
@@ -861,7 +863,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
         return 0;
 
     case WM_TIMER:
-        if (wparam == 1) {
+        if (wparam == kSnapshotTimerId) {
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
             if (webview && webview->ready()) webview->publish_snapshot();
 #endif
@@ -876,7 +878,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 
     case WM_INPUT:
         raw_input_timing().record(reinterpret_cast<HRAWINPUT>(lparam));
-        return 0;
+        return DefWindowProcW(hwnd, message, wparam, lparam);
 
     case WM_INPUT_DEVICE_CHANGE:
         if (wparam == GIDC_REMOVAL) {
@@ -890,7 +892,7 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
         return 0;
 
     case WM_DESTROY:
-        KillTimer(hwnd, 1);
+        KillTimer(hwnd, kSnapshotTimerId);
         raw_input_timing().clear();
 #ifdef MOUSE_ENGINE_WEBVIEW2_SDK
         delete webview;

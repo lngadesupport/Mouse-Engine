@@ -77,6 +77,10 @@ Mouse Engine does **not** reconstruct packets from:
 
 If a trace is absent or corrupt, replay remains unavailable rather than synthesizing data.
 
+## Investigation timeline
+
+The Windows `sessionTrace` response also carries a Core-generated investigation timeline when the trace passes replay validation. The timeline is derived from the persisted packets plus persisted anomaly anchors and uses the shared 50 ms observation/segmentation threshold. The WebView2 UI renders these events; it does not reconstruct packet ordering, idle gaps, or anomaly placement from aggregate timing statistics.
+
 ## Privacy
 
 The trace contains device/session identifiers already used by the local session model and observed mouse event fields. It does not intentionally collect account credentials, browser history, or user identity.

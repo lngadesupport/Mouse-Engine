@@ -115,9 +115,11 @@ jobs:
             }
             if ($session.anomalies -isnot [array]) { throw 'Persisted anomaly ledger must be an array.' }
             foreach ($anomaly in $session.anomalies) {
-              foreach ($field in @('id','severity','type','message','stream')) {
+              foreach ($field in @('id','severity','type','message','stream','packetIndex','timestampMs')) {
                 if ($null -eq $anomaly.$field) { throw "Persisted anomaly field missing: $field" }
               }
+              if ($anomaly.packetIndex -lt 0) { throw 'Persisted anomaly packet index must be non-negative.' }
+              if ([double]::IsNaN([double]$anomaly.timestampMs) -or [double]::IsInfinity([double]$anomaly.timestampMs)) { throw 'Persisted anomaly timestamp must be finite.' }
             }
 
           }

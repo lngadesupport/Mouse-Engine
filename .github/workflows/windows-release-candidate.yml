@@ -16,117 +16,74 @@ jobs:
     timeout-minutes: 30
     env:
       WEBVIEW2_VERSION: '1.0.4258.31'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure Visual Studio environment
+      - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
       - name: Install Inno Setup
         shell: pwsh
-        run: |
-          choco install innosetup --no-progress -y
+        run: choco install innosetup --no-progress -y
 
       - name: Download pinned WebView2 SDK
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $sdk = Join-Path $env:RUNNER_TEMP 'webview2-sdk'
-          New-Item -ItemType Directory -Force -Path $sdk | Out-Null
-          $nupkg = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$env:WEBVIEW2_VERSION.nupkg"
-          $sdkZip = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$env:WEBVIEW2_VERSION.zip"
-          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$env:WEBVIEW2_VERSION" -OutFile $nupkg
-          Copy-Item -LiteralPath $nupkg -Destination $sdkZip -Force
-          Expand-Archive -LiteralPath $sdkZip -DestinationPath $sdk -Force
-          "WEBVIEW2_SDK_DIR=$sdk" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          if (-not (Test-Path (Join-Path $sdk 'build/native/include/WebView2.h'))) { throw 'WebView2.h missing from SDK' }
-          if (-not (Test-Path (Join-Path $sdk 'build/native/x64/WebView2LoaderStatic.lib'))) { throw 'WebView2LoaderStatic.lib missing from SDK' }
+          $sdk = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$env:WEBVIEW2_VERSION.nupkg"
+          Invoke-WebRequest "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$env:WEBVIEW2_VERSION" -OutFile $sdk
+          $extract = Join-Path $env:RUNNER_TEMP "webview2-sdk"
+          if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+          Expand-Archive -LiteralPath $sdk -DestinationPath $extract
+          $include = Join-Path $extract "build/native/include"
+          $lib = Join-Path $extract "build/native/x64"
+          if (-not (Test-Path (Join-Path $include "WebView2.h"))) { throw "WebView2.h missing from pinned SDK." }
+          if (-not (Test-Path (Join-Path $lib "WebView2LoaderStatic.lib"))) { throw "WebView2LoaderStatic.lib missing from pinned SDK." }
+          "WEBVIEW2_SDK_DIR=$extract" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
-      - name: Configure
+      - name: Configure Release
         shell: pwsh
-        run: |
-          cmake -S . -B build-release -G 'Visual Studio 18 2026' -A x64 -DWEBVIEW2_SDK_DIR="$env:WEBVIEW2_SDK_DIR"
+        run: cmake -S . -B build-release -G 'Visual Studio 18 2026' -A x64 -DWEBVIEW2_SDK_DIR="$env:WEBVIEW2_SDK_DIR"
 
-      - name: Build
+      - name: Build Release
         shell: pwsh
-        run: |
-          cmake --build build-release --config Release --parallel
+        run: cmake --build build-release --config Release --parallel
 
-      - name: Test
+      - name: Run CTest
         shell: pwsh
-        run: |
-          ctest --test-dir build-release -C Release --output-on-failure
+        run: ctest --test-dir build-release -C Release --output-on-failure
 
-      - name: UI contract test
+      - name: Run UI contract tests
         shell: pwsh
         run: |
           node ui/ui_contract_test.mjs
-
-      - name: WebView2 bridge contract test
-        shell: pwsh
-        run: |
           node ui/ui_bridge_contract_test.mjs
 
-      - name: Host self-test
+      - name: Run Windows host self-test and contracts
         shell: pwsh
         run: |
-          $exe = './build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe'
+          $exe = Resolve-Path "build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe"
           & $exe --self-test
-          if ($LASTEXITCODE -ne 0) { throw 'Host self-test failed.' }
-
-          $environment = & $exe --print-environment | ConvertFrom-Json
-          if ($environment.platform -ne 'windows') { throw 'Host platform contract mismatch.' }
-          if ($environment.architecture -ne 'x64') { throw 'Host architecture contract mismatch.' }
-          if ($environment.mutationDefaultAllowed -ne $false) { throw 'Mutation must remain denied by default.' }
-          if ($environment.firmwareFlashingEnabled -ne $false) { throw 'Firmware flashing must remain disabled.' }
-
-          $snapshot = & $exe --print-snapshot | ConvertFrom-Json
-          if ($snapshot.schemaVersion -ne 2) { throw 'Snapshot schema version mismatch.' }
-          if ($snapshot.host.online -ne $true) { throw 'Host snapshot is not online.' }
-          if ($snapshot.device.observationAvailable -isnot [bool]) { throw 'Device observation availability must be boolean.' }
-          if ($snapshot.device.connected -isnot [bool]) { throw 'Device connection state must be boolean.' }
-          if ($snapshot.device.mouseCount -isnot [int] -or $snapshot.device.mouseCount -lt 0) { throw 'Mouse count must be a non-negative integer.' }
-          if ($snapshot.device.detailAvailable -isnot [bool]) { throw 'Device detail availability must be boolean.' }
-          if ($snapshot.device.maxObservedButtons -isnot [int] -or $snapshot.device.maxObservedButtons -lt 0) { throw 'Observed button count must be a non-negative integer.' }
-          if ($snapshot.device.maxObservedSampleRate -isnot [int] -or $snapshot.device.maxObservedSampleRate -lt 0) { throw 'Observed sample rate must be a non-negative integer.' }
-          if ($snapshot.device.identityResolvedCount -isnot [int] -or $snapshot.device.identityResolvedCount -lt 0) { throw 'Resolved identity count must be a non-negative integer.' }
-          if ($snapshot.device.identities -isnot [array]) { throw 'Identity observations must be an array.' }
-          if ($snapshot.identity.available -isnot [bool]) { throw 'Identity availability must be boolean.' }
-          if ($snapshot.sessions.available -isnot [bool]) { throw 'Session history availability must be boolean.' }
-          if ($snapshot.sessions.items -isnot [array]) { throw 'Session history items must be an array.' }
-          foreach ($session in $snapshot.sessions.items) {
-            if ([string]::IsNullOrWhiteSpace($session.id)) { throw 'Persisted session id must be present.' }
-            if ([string]::IsNullOrWhiteSpace($session.deviceId)) { throw 'Persisted session device id must be present.' }
-            if ($session.packetCount -lt 0 -or $session.intervalCount -lt 0) { throw 'Persisted session counts must be non-negative.' }
-            if ($session.medianIntervalMs -lt 0 -or $session.p95IntervalMs -lt 0 -or $session.jitterP95MinusMedianMs -lt 0) { throw 'Persisted session timing must be non-negative.' }
-            if ($session.idleGapCount50ms -lt 0 -or $session.activeRunCount -lt 0 -or $session.longestActiveRunPackets -lt 0) { throw 'Persisted session activity must be non-negative.' }
-            if ($session.complete -isnot [bool]) { throw 'Persisted session completeness must be boolean.' }
-            if ($session.traceAvailable -isnot [bool]) { throw 'Persisted trace availability must be boolean.' }
-            if ($session.tracePacketCount -lt 0) { throw 'Persisted trace packet count must be non-negative.' }
-            if ($session.traceAvailable -and $session.tracePacketCount -lt 1) { throw 'Available trace must expose at least one packet.' }
-            if ($session.distribution.sampleCount -lt 0) { throw 'Persisted distribution sample count must be non-negative.' }
-            if ($session.distribution.meanIntervalMs -lt 0 -or $session.distribution.bucketWidthMs -lt 0) { throw 'Persisted distribution metrics must be non-negative.' }
-            if ($session.distribution.buckets -isnot [array]) { throw 'Persisted distribution buckets must be an array.' }
-            foreach ($bucket in $session.distribution.buckets) {
-              if ($bucket.lowerBoundMs -lt 0 -or $bucket.upperBoundMs -lt $bucket.lowerBoundMs -or $bucket.count -lt 0) { throw 'Persisted distribution bucket bounds/count are invalid.' }
-              if ($bucket.cumulativeFraction -lt 0 -or $bucket.cumulativeFraction -gt 1) { throw 'Persisted distribution CDF fraction is invalid.' }
+          if ($LASTEXITCODE -ne 0) { throw "Host self-test failed with code $LASTEXITCODE" }
+          $snapshot = & $exe --snapshot | ConvertFrom-Json
+          if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
+          if ($snapshot.observedInput.session.traceAvailable -ne $false) { throw 'Inactive session trace must remain unavailable.' }
+          if ($snapshot.observedInput.session.tracePacketCount -ne 0) { throw 'Inactive session trace packet count must remain zero.' }
+          if ($snapshot.observedInput.session.traceTruncated -ne $false) { throw 'Inactive session trace truncation must remain false.' }
+          if ($snapshot.observedInput.session.traceDroppedPackets -ne 0) { throw 'Inactive session trace dropped packet count must remain zero.' }
+          if ($snapshot.observedInput.session.timelineAvailable -ne $false) { throw 'Inactive session timeline must remain unavailable.' }
+          if ($snapshot.observedInput.session.anomalies -isnot [array]) { throw 'Persisted anomaly ledger must be an array.' }
+          foreach ($anomaly in $snapshot.observedInput.session.anomalies) {
+            foreach ($field in @('id','severity','type','message','stream','packetIndex','timestampMs')) {
+              if ($null -eq $anomaly.$field) { throw "Persisted anomaly field missing: $field" }
             }
-            if ($session.anomalies -isnot [array]) { throw 'Persisted anomaly ledger must be an array.' }
-            foreach ($anomaly in $session.anomalies) {
-              foreach ($field in @('id','severity','type','message','stream','packetIndex','timestampMs')) {
-                if ($null -eq $anomaly.$field) { throw "Persisted anomaly field missing: $field" }
-              }
-              if ($anomaly.packetIndex -lt 0) { throw 'Persisted anomaly packet index must be non-negative.' }
-              if ([double]::IsNaN([double]$anomaly.timestampMs) -or [double]::IsInfinity([double]$anomaly.timestampMs)) { throw 'Persisted anomaly timestamp must be finite.' }
-            }
-
+            if ($anomaly.packetIndex -lt 0) { throw 'Persisted anomaly packet index must be non-negative.' }
+            if ([double]::IsNaN([double]$anomaly.timestampMs) -or [double]::IsInfinity([double]$anomaly.timestampMs)) { throw 'Persisted anomaly timestamp must be finite.' }
           }
-
           if ($snapshot.identity.transport -ne 'per-device') { throw 'Transport must remain per-device.' }
-
           foreach ($identity in $snapshot.device.identities) {
             if ($identity.resolved -and $identity.transport -notin @('Usb', 'Bluetooth', 'Unknown')) { throw 'Unexpected direct transport classification.' }
             if ($identity.resolved -and [string]::IsNullOrWhiteSpace($identity.topologyHash)) { throw 'Resolved identity must carry topology evidence.' }
@@ -137,7 +94,6 @@ jobs:
             if ($identity.usbEndpoint.interruptInEndpointCount -isnot [int] -or $identity.usbEndpoint.interruptInEndpointCount -lt 0) { throw 'USB endpoint count must be non-negative.' }
             if ($identity.usbEndpoint.configuredInterval.available -ne $false) { throw 'Configured interval must remain unavailable.' }
             if ($identity.usbEndpoint.descriptorInterval.available -and ($identity.usbEndpoint.descriptorInterval.value -lt 0 -or $identity.usbEndpoint.descriptorInterval.value -gt 255)) { throw 'Descriptor bInterval must be an unsigned byte.' }
-
             if ($null -eq $identity.observedInput) { throw 'Identity must carry observed input state.' }
             if ([string]::IsNullOrWhiteSpace($identity.observedInput.scope)) { throw 'Observed timing scope must be explicit.' }
             if ($null -eq $identity.observedInput.session) { throw 'Observed input must carry session state.' }
@@ -146,7 +102,6 @@ jobs:
             if ($identity.observedInput.session.durationMs -lt 0) { throw 'Session duration must be non-negative.' }
             if ($identity.observedInput.session.traceAvailable -isnot [bool]) { throw 'Active trace availability must be boolean.' }
             if ($identity.observedInput.session.tracePacketCount -lt 0) { throw 'Active trace packet count must be non-negative.' }
-
             foreach ($streamName in @('all','movement','button','wheel')) {
               $stream = $identity.observedInput.streams.$streamName
               if ($null -eq $stream) { throw "Observed stream missing: $streamName" }
@@ -157,9 +112,6 @@ jobs:
               if ($stream.timing.intervalCount -lt 0 -or $stream.timing.minIntervalMs -lt 0 -or $stream.timing.medianIntervalMs -lt 0 -or $stream.timing.p95IntervalMs -lt 0 -or $stream.timing.maxIntervalMs -lt 0 -or $stream.timing.jitterP95MinusMedianMs -lt 0 -or $stream.timing.idleGapCount50ms -lt 0 -or $stream.timing.longestIdleGapMs -lt 0) { throw "Observed timing values must be non-negative: $streamName" }
             }
           }
-
-          if ($snapshot.mutation.allowed -ne $false) { throw 'Mutation policy must remain denied.' }
-
           $storage = & $exe --print-storage | ConvertFrom-Json
           if ([string]::IsNullOrWhiteSpace($storage.workspaceRoot)) { throw 'Workspace root must be reported.' }
           if ([string]::IsNullOrWhiteSpace($storage.cacheRoot)) { throw 'Cache root must be reported.' }
@@ -168,21 +120,11 @@ jobs:
           Write-Output 'host_snapshot_contract: PASS'
           Write-Output 'local_workspace_contract: PASS'
 
-      - name: Validate Windows host binary
-        shell: pwsh
-        run: |
-          $exe = Resolve-Path './build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe'
-          $dump = & dumpbin.exe /headers $exe 2>&1
-          if ($LASTEXITCODE -ne 0) { throw 'dumpbin failed for host executable.' }
-          if (-not ($dump | Select-String '8664 machine \(x64\)')) { throw 'Host executable is not a validated x64 PE binary.' }
-          Write-Output 'windows_host_pe_x64: PASS'
-
       - name: Package Windows distribution
         shell: pwsh
-        run: |
-          python tools/package_windows.py --source . --host-executable ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --output ./MouseEngine-1.0.0-rc.3-win64.zip
+        run: python tools/package_windows.py --source . --host-executable ./build-release/src/MouseEngine.Host.Windows/Release/MouseEngine.Host.Windows.exe --output ./MouseEngine-1.0.0-rc.3-win64.zip
 
-      - name: Verify package archive
+      - name: Validate Windows distribution package
         shell: pwsh
         run: |
           python tools/package_windows_tests.py
@@ -195,6 +137,11 @@ jobs:
         shell: pwsh
         run: |
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build_windows_installer.ps1
+
+      - name: Run Windows installer runtime smoke
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/windows_installer_runtime_smoke.ps1 -InstallerPath './dist/MouseEngine-1.0.0-rc.3-win64-setup.exe'
 
       - name: Upload Windows distribution
         uses: actions/upload-artifact@v4

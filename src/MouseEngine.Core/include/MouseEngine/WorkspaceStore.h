@@ -70,9 +70,9 @@ public:
             (std::istreambuf_iterator<char>(manifest)),
             std::istreambuf_iterator<char>());
 
-        if (contents.find(""schemaVersion": 1") == std::string::npos ||
-            contents.find(""type": "mouse-engine-workspace"") == std::string::npos ||
-            contents.find(""cloudSync": false") == std::string::npos) {
+        if (contents.find("\"schemaVersion\": 1") == std::string::npos ||
+            contents.find("\"type\": \"mouse-engine-workspace\"") == std::string::npos ||
+            contents.find("\"cloudSync\": false") == std::string::npos) {
             return fail(error, "workspace manifest does not match schema v1");
         }
 
@@ -94,18 +94,12 @@ public:
         if (!output) return fail(error, "workspace manifest cannot be written");
 
         output
-            << "{
-"
-            << "  "schemaVersion": " << manifest.schema_version << ",
-"
-            << "  "type": "" << manifest.type << "",
-"
-            << "  "cloudSync": " << (manifest.cloud_sync ? "true" : "false") << ",
-"
-            << "  "createdBy": "Mouse Engine"
-"
-            << "}
-";
+            << "{\\n"
+            << "  \\"schemaVersion\\": " << manifest.schema_version << ",\\n"
+            << "  \\"type\\": \\"" << manifest.type << "\\",\\n"
+            << "  \\"cloudSync\\": " << (manifest.cloud_sync ? "true" : "false") << ",\\n"
+            << "  \\"createdBy\\": \\"Mouse Engine\\"\\n"
+            << "}\\n";
 
         if (!output) return fail(error, "workspace manifest write failed");
         return true;

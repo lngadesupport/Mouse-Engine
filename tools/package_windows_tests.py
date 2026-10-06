@@ -41,6 +41,7 @@ def main() -> int:
         "Host executable is not a PE file.",
         "if (Test-Path $output) { Remove-Item $output -Force }",
         "if (-not (Test-Path $output))",
+        "Installer output is not a PE file.",
         "WINDOWS_INSTALLER_BUILD=PASS",
     ]:
         assert marker in installer_build, marker

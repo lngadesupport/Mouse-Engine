@@ -26,5 +26,7 @@ try {
 }
 
 if (-not (Test-Path $output)) { throw "Installer output missing: $output" }
+$installerBytes = [System.IO.File]::ReadAllBytes($output)
+if ($installerBytes.Length -lt 2 -or $installerBytes[0] -ne 0x4D -or $installerBytes[1] -ne 0x5A) { throw "Installer output is not a PE file." }
 Get-FileHash $output -Algorithm SHA256 | Format-List
 Write-Output "WINDOWS_INSTALLER_BUILD=PASS"

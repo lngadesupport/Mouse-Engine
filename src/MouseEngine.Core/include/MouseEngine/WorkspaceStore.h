@@ -94,12 +94,12 @@ public:
         if (!output) return fail(error, "workspace manifest cannot be written");
 
         output
-            << "{\\n"
-            << "  \\"schemaVersion\\": " << manifest.schema_version << ",\\n"
-            << "  \\"type\\": \\"" << manifest.type << "\\",\\n"
-            << "  \\"cloudSync\\": " << (manifest.cloud_sync ? "true" : "false") << ",\\n"
-            << "  \\"createdBy\\": \\"Mouse Engine\\"\\n"
-            << "}\\n";
+            << "{\n"
+            << "  \"schemaVersion\": " << manifest.schema_version << ",\n"
+            << "  \"type\": \"" << manifest.type << "\",\n"
+            << "  \"cloudSync\": " << (manifest.cloud_sync ? "true" : "false") << ",\n"
+            << "  \"createdBy\": \"Mouse Engine\"\n"
+            << "}\n";
 
         if (!output) return fail(error, "workspace manifest write failed");
         return true;

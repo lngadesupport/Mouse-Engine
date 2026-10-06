@@ -18,6 +18,7 @@ required = [
     "tools/package_windows.py",
     "tools/package_windows_tests.py",
     "tools/windows_installer_smoke.ps1",
+    "tools/windows_installer_runtime_smoke.ps1",
 ]
 for rel in required:
     if not (root / rel).is_file():

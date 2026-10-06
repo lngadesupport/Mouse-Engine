@@ -17,6 +17,7 @@ def main() -> int:
         root / "packaging/uninstall.ps1",
         root / "packaging/RELEASE_MANIFEST.json",
         root / "tools/windows_installer_runtime_smoke.ps1",
+        root / "tools/build_windows_installer.ps1",
     ]
     for path in required:
         assert path.is_file(), path
@@ -35,7 +36,16 @@ def main() -> int:
     assert install_script.index(self_test_marker) < install_script.index(backup_cleanup_marker)
     assert 'Move-Item $backupRoot $installRoot -Force -ErrorAction SilentlyContinue' in install_script
     assert 'elseif (Test-Path $installRoot)' in install_script
-\n    runtime_smoke = (root / "tools/windows_installer_runtime_smoke.ps1").read_text(encoding="utf-8")
+\n    installer_build = (root / "tools/build_windows_installer.ps1").read_text(encoding="utf-8")
+    for marker in [
+        "Host executable is not a PE file.",
+        "if (Test-Path $output) { Remove-Item $output -Force }",
+        "if (-not (Test-Path $output))",
+        "WINDOWS_INSTALLER_BUILD=PASS",
+    ]:
+        assert marker in installer_build, marker
+
+    runtime_smoke = (root / "tools/windows_installer_runtime_smoke.ps1").read_text(encoding="utf-8")
     for marker in [
         "VERYSILENT",
         "--self-test",
